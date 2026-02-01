@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRestaurant } from '@/context/RestaurantContext';
 import MenuItemCard from '@/components/MenuItemCard';
 import CartSummary from '@/components/CartSummary';
+import CartDrawer from '@/components/CartDrawer';
 import PaymentModal from '@/components/PaymentModal';
 import { trackQRScan } from '@/utils/analytics';
 import { triggerHapticFeedback, isOnline } from '@/utils/optimization';
@@ -56,6 +57,8 @@ const CustomerMenu: React.FC = () => {
     getTableSession,
     addToCart,
     updateCartQuantity,
+    removeFromCart,
+    clearCart,
     submitOrder,
     callWaiter,
     requestBill,
@@ -65,6 +68,7 @@ const CustomerMenu: React.FC = () => {
   } = useRestaurant();
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [loadingItems, setLoadingItems] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOffline, setIsOffline] = useState(!isOnline());
@@ -167,6 +171,81 @@ const CustomerMenu: React.FC = () => {
       });
     }
   }, [session.isLocked, loadingItems, tableId, updateCartQuantity, getItemQuantity, toast]);
+
+  const handleUpdateCartQuantity = useCallback(async (itemId: string, quantity: number) => {
+    if (session.isLocked || loadingItems.has(itemId)) return;
+    
+    triggerHapticFeedback('light');
+    setLoadingItems(prev => new Set(prev).add(itemId));
+    
+    try {
+      await updateCartQuantity(tableId, itemId, quantity);
+    } catch (error) {
+      console.error('Error updating cart quantity:', error);
+      triggerHapticFeedback('heavy');
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно обновяване на количество',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
+  }, [session.isLocked, loadingItems, tableId, updateCartQuantity, toast]);
+
+  const handleRemoveFromCart = useCallback(async (itemId: string) => {
+    if (session.isLocked || loadingItems.has(itemId)) return;
+    
+    triggerHapticFeedback('medium');
+    setLoadingItems(prev => new Set(prev).add(itemId));
+    
+    try {
+      await removeFromCart(tableId, itemId);
+      toast({
+        title: '✅ Премахнато',
+        description: 'Артикулът е премахнат от кошницата',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+      triggerHapticFeedback('heavy');
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно премахване на артикул',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
+  }, [session.isLocked, loadingItems, tableId, removeFromCart, toast]);
+
+  const handleClearCart = useCallback(async () => {
+    if (session.isLocked || session.cart.length === 0) return;
+    
+    try {
+      await clearCart(tableId);
+      toast({
+        title: '✅ Кошницата е изчистена',
+        description: 'Всички артикули са премахнати',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно изчистване на кошницата',
+        variant: 'destructive',
+      });
+    }
+  }, [session.isLocked, session.cart.length, tableId, clearCart, toast]);
 
   const handleSubmitOrder = useCallback(async () => {
     if (session.isLocked || cartItemCount === 0 || isSubmitting) return;
@@ -289,7 +368,7 @@ const CustomerMenu: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0" onClick={() => setCartDrawerOpen(true)}>
               <CartSummary itemCount={cartItemCount} total={cartTotal} />
             </div>
           </div>
@@ -379,6 +458,20 @@ const CustomerMenu: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Cart Drawer */}
+      <CartDrawer
+        open={cartDrawerOpen}
+        onOpenChange={setCartDrawerOpen}
+        cartItems={session.cart}
+        total={cartTotal}
+        itemCount={cartItemCount}
+        onUpdateQuantity={handleUpdateCartQuantity}
+        onRemoveItem={handleRemoveFromCart}
+        onClearCart={handleClearCart}
+        isLoading={loadingItems.size > 0}
+        disabled={session.isLocked}
+      />
 
       {/* Payment Modal */}
       <PaymentModal

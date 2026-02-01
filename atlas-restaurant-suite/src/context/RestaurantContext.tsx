@@ -543,15 +543,32 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [loadTableSessions]);
 
   const clearCart = useCallback(async (tableId: string) => {
+    // Optimistic update
+    setTables(prev => {
+      const updated = { ...prev };
+      if (updated[tableId]) {
+        updated[tableId] = {
+          ...updated[tableId],
+          cart: [],
+        };
+      }
+      return updated;
+    });
+
     try {
-      await supabase
+      const { error } = await supabase
         .from('cart_items')
         .delete()
         .eq('table_id', tableId);
+
+      if (error) throw error;
     } catch (error) {
       console.error('Error clearing cart:', error);
+      // Reload on error
+      loadTableSessions();
+      throw error;
     }
-  }, []);
+  }, [loadTableSessions, tables]);
 
   const submitOrder = useCallback(async (tableId: string) => {
     try {
@@ -589,15 +606,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           timestamp: Date.now(),
         });
 
-      // Clear cart
+      // Clear cart immediately after order submission
+      // This resets the menu to clean state, but bill requests remain visible
       await supabase
         .from('cart_items')
         .delete()
         .eq('table_id', tableId);
+
+      // Optimistic update: clear cart in UI immediately
+      setTables(prev => {
+        const updated = { ...prev };
+        if (updated[tableId]) {
+          updated[tableId] = {
+            ...updated[tableId],
+            cart: [], // Clear cart immediately
+          };
+        }
+        return updated;
+      });
     } catch (error) {
       console.error('Error submitting order:', error);
+      throw error;
     }
-  }, []);
+  }, [tables]);
 
   const callWaiter = useCallback(async (tableId: string) => {
     try {
@@ -966,11 +997,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
 
-      // Step 4: Delete ALL requests from table_requests (direct database operation)
+      // Step 4: Delete ALL requests from table_requests (including bill requests)
+      // This clears everything: orders, waiter calls, and bill requests
       const { data: deletedRequests, error: requestsError } = await supabase
         .from('table_requests')
         .delete()
-        .eq('table_id', tableId)
+        .eq('table_id', tableId) // Delete ALL requests, no filtering
         .select();
 
       if (requestsError) {
@@ -978,7 +1010,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadTableSessions();
         throw requestsError;
       }
-      console.log(`✅ Deleted ${deletedRequests?.length || 0} requests from table_requests for ${tableId}`);
+      console.log(`✅ Deleted ${deletedRequests?.length || 0} requests (including bills) from table_requests for ${tableId}`);
 
       // Step 5: Delete ALL cart items (direct database operation)
       const { data: deletedCart, error: cartError } = await supabase
