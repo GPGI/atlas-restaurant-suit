@@ -7,6 +7,7 @@ import QRCodeCard from '@/components/QRCodeCard';
 const ClientTables: React.FC = () => {
   const [language] = useState<Language>(getStoredLanguage());
   const t = getTranslations(language);
+  const { loading } = useRestaurant();
 
   // Get all tables 1-10
   const tableIds = Array.from({ length: 10 }, (_, i) => 
@@ -57,22 +58,31 @@ const ClientTables: React.FC = () => {
 
       {/* QR Codes Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-          {tableIds.map((tableId) => {
-            const menuUrl = getMenuUrl(tableId);
-            const tableNumber = getTableNumber(tableId);
-            
-            return (
-              <QRCodeCard
-                key={tableId}
-                tableId={tableId}
-                tableNumber={tableNumber}
-                menuUrl={menuUrl}
-                translations={t}
-              />
-            );
-          })}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading QR codes...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+            {tableIds.map((tableId) => {
+              const menuUrl = getMenuUrl(tableId);
+              const tableNumber = getTableNumber(tableId);
+              
+              return (
+                <QRCodeCard
+                  key={tableId}
+                  tableId={tableId}
+                  tableNumber={tableNumber}
+                  menuUrl={menuUrl}
+                  translations={t}
+                />
+              );
+            })}
+          </div>
+        )}
 
         {/* Help Section */}
         <div className="mt-10 sm:mt-12 p-6 bg-card border border-border rounded-xl">

@@ -29,7 +29,7 @@ const playAlertSound = () => {
 
 const StaffDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { tables, completeRequest, resetTable } = useRestaurant();
+  const { tables, completeRequest, resetTable, loading } = useRestaurant();
   const prevPendingCountRef = useRef<number>(0);
   
   // Get all table IDs in order
@@ -55,15 +55,21 @@ const StaffDashboard: React.FC = () => {
     prevPendingCountRef.current = currentPendingCount;
   }, [tables, getTotalPendingCount]);
 
-  // Simulate real-time updates (polling)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // This triggers a re-render to check for updates
-      // In a real app, this would fetch from an API
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  const handleCompleteRequest = useCallback(async (tableId: string, requestId: string) => {
+    try {
+      await completeRequest(tableId, requestId);
+    } catch (error) {
+      console.error('Error completing request:', error);
+    }
+  }, [completeRequest]);
+
+  const handleResetTable = useCallback(async (tableId: string) => {
+    try {
+      await resetTable(tableId);
+    } catch (error) {
+      console.error('Error resetting table:', error);
+    }
+  }, [resetTable]);
 
   const totalPending = getTotalPendingCount();
   const totalRevenue = Object.values(tables).reduce((sum, table) => {
@@ -132,26 +138,35 @@ const StaffDashboard: React.FC = () => {
 
       {/* Table Grid */}
       <main className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 stagger-children">
-          {tableIds.map(tableId => {
-            const session = tables[tableId] || {
-              tableId,
-              isLocked: false,
-              cart: [],
-              requests: [],
-              isVip: false,
-            };
-            
-            return (
-              <TableCard
-                key={tableId}
-                session={session}
-                onCompleteRequest={(requestId) => completeRequest(tableId, requestId)}
-                onReset={() => resetTable(tableId)}
-              />
-            );
-          })}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading tables...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 stagger-children">
+            {tableIds.map(tableId => {
+              const session = tables[tableId] || {
+                tableId,
+                isLocked: false,
+                cart: [],
+                requests: [],
+                isVip: false,
+              };
+              
+              return (
+                <TableCard
+                  key={tableId}
+                  session={session}
+                  onCompleteRequest={(requestId) => handleCompleteRequest(tableId, requestId)}
+                  onReset={() => handleResetTable(tableId)}
+                />
+              );
+            })}
+          </div>
+        )}
       </main>
 
       {/* Legend */}

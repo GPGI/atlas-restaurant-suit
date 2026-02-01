@@ -17,7 +17,7 @@ import {
 const MenuEditor: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { menuItems, addMenuItem, updateMenuItem, deleteMenuItem } = useRestaurant();
+  const { menuItems, addMenuItem, updateMenuItem, deleteMenuItem, loading } = useRestaurant();
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -53,7 +53,7 @@ const MenuEditor: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name || !formData.cat || !formData.price) {
       toast({
         title: 'Error',
@@ -73,42 +73,60 @@ const MenuEditor: React.FC = () => {
       return;
     }
 
-    if (editingItem) {
-      updateMenuItem(editingItem.id, {
-        name: formData.name,
-        cat: formData.cat,
-        price: price,
-        desc: formData.desc || undefined,
-      });
+    try {
+      if (editingItem) {
+        await updateMenuItem(editingItem.id, {
+          name: formData.name,
+          cat: formData.cat,
+          price: price,
+          desc: formData.desc || undefined,
+        });
+        toast({
+          title: 'Success',
+          description: 'Menu item updated',
+        });
+      } else {
+        await addMenuItem({
+          name: formData.name,
+          cat: formData.cat,
+          price: price,
+          desc: formData.desc || undefined,
+        });
+        toast({
+          title: 'Success',
+          description: 'Menu item added',
+        });
+      }
+
+      setIsDialogOpen(false);
+      setEditingItem(null);
+      setFormData({ name: '', cat: '', price: '', desc: '' });
+    } catch (error) {
+      console.error('Error saving menu item:', error);
       toast({
-        title: 'Success',
-        description: 'Menu item updated',
-      });
-    } else {
-      addMenuItem({
-        name: formData.name,
-        cat: formData.cat,
-        price: price,
-        desc: formData.desc || undefined,
-      });
-      toast({
-        title: 'Success',
-        description: 'Menu item added',
+        title: 'Error',
+        description: 'Failed to save menu item',
+        variant: 'destructive',
       });
     }
-
-    setIsDialogOpen(false);
-    setEditingItem(null);
-    setFormData({ name: '', cat: '', price: '', desc: '' });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this menu item?')) {
-      deleteMenuItem(id);
-      toast({
-        title: 'Success',
-        description: 'Menu item deleted',
-      });
+      try {
+        await deleteMenuItem(id);
+        toast({
+          title: 'Success',
+          description: 'Menu item deleted',
+        });
+      } catch (error) {
+        console.error('Error deleting menu item:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to delete menu item',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -206,8 +224,16 @@ const MenuEditor: React.FC = () => {
 
       {/* Menu Items */}
       <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="space-y-8">
-          {Object.entries(groupedItems).map(([category, items]) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading menu items...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {Object.entries(groupedItems).map(([category, items]) => (
             <section key={category}>
               <h2 className="text-xl font-semibold mb-4 text-foreground">
                 {category}
@@ -250,7 +276,8 @@ const MenuEditor: React.FC = () => {
               </div>
             </section>
           ))}
-        </div>
+          </div>
+        )}
       </main>
     </div>
   );

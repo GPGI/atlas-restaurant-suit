@@ -46,6 +46,7 @@ const CustomerMenu: React.FC = () => {
     requestBill,
     getCartTotal,
     getCartItemCount,
+    loading,
   } = useRestaurant();
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -75,50 +76,101 @@ const CustomerMenu: React.FC = () => {
     return cartItem?.quantity || 0;
   };
 
-  const handleAddItem = (item: typeof menuItems[0]) => {
+  const handleAddItem = async (item: typeof menuItems[0]) => {
     if (session.isLocked) return;
-    addToCart(tableId, {
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: 1,
-    });
+    try {
+      await addToCart(tableId, {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+      });
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно добавяне на артикул',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleRemoveItem = (itemId: string) => {
+  const handleRemoveItem = async (itemId: string) => {
     if (session.isLocked) return;
-    const currentQty = getItemQuantity(itemId);
-    updateCartQuantity(tableId, itemId, currentQty - 1);
+    try {
+      const currentQty = getItemQuantity(itemId);
+      await updateCartQuantity(tableId, itemId, currentQty - 1);
+    } catch (error) {
+      console.error('Error removing item from cart:', error);
+    }
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     if (session.isLocked || cartItemCount === 0) return;
     
-    submitOrder(tableId);
-    toast({
-      title: '✅ Поръчката е изпратена',
-      description: 'Благодарим ви! Ще я приготвим скоро.',
-    });
+    try {
+      await submitOrder(tableId);
+      toast({
+        title: '✅ Поръчката е изпратена',
+        description: 'Благодарим ви! Ще я приготвим скоро.',
+      });
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно изпращане на поръчка',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleCallWaiter = () => {
+  const handleCallWaiter = async () => {
     if (session.isLocked) return;
     
-    callWaiter(tableId);
-    toast({
-      title: '🔔 Сервитьорът е повикан',
-      description: 'Моля, изчакайте.',
-    });
+    try {
+      await callWaiter(tableId);
+      toast({
+        title: '🔔 Сервитьорът е повикан',
+        description: 'Моля, изчакайте.',
+      });
+    } catch (error) {
+      console.error('Error calling waiter:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно повикване на сервитьор',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handlePaymentSelect = (method: 'cash' | 'card') => {
+  const handlePaymentSelect = async (method: 'cash' | 'card') => {
     setPaymentModalOpen(false);
-    requestBill(tableId, method);
-    toast({
-      title: '💳 Заявка за сметка',
-      description: `Плащане: ${method === 'cash' ? 'В брой' : 'С карта'}`,
-    });
+    try {
+      await requestBill(tableId, method);
+      toast({
+        title: '💳 Заявка за сметка',
+        description: `Плащане: ${method === 'cash' ? 'В брой' : 'С карта'}`,
+      });
+    } catch (error) {
+      console.error('Error requesting bill:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешна заявка за сметка',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Зареждане на менюто...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (session.isLocked) {
     return (

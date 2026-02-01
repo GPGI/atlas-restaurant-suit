@@ -22,6 +22,7 @@ const PremiumMenu: React.FC = () => {
     requestBill,
     getCartTotal,
     getCartItemCount,
+    loading,
   } = useRestaurant();
 
   const navigate = useNavigate();
@@ -51,62 +52,108 @@ const PremiumMenu: React.FC = () => {
     return cartItem?.quantity || 0;
   };
 
-  const handleAddItem = (item: typeof premiumMenuItems[0]) => {
+  const handleAddItem = async (item: typeof premiumMenuItems[0]) => {
     if (session.isLocked) return;
     // Haptic feedback
     if ('vibrate' in navigator) {
       navigator.vibrate(30);
     }
-    addToCart(tableId, {
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: 1,
-    });
+    try {
+      await addToCart(tableId, {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+      });
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+    }
   };
 
-  const handleRemoveItem = (itemId: string) => {
+  const handleRemoveItem = async (itemId: string) => {
     if (session.isLocked) return;
-    const currentQty = getItemQuantity(itemId);
-    updateCartQuantity(tableId, itemId, currentQty - 1);
+    try {
+      const currentQty = getItemQuantity(itemId);
+      await updateCartQuantity(tableId, itemId, currentQty - 1);
+    } catch (error) {
+      console.error('Error removing item from cart:', error);
+    }
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     if (session.isLocked || cartItemCount === 0) return;
     
     if ('vibrate' in navigator) {
       navigator.vibrate(50);
     }
     
-    submitOrder(tableId);
-    toast({
-      title: '✅ Order Submitted',
-      description: 'Your order is being prepared with care.',
-    });
+    try {
+      await submitOrder(tableId);
+      toast({
+        title: '✅ Order Submitted',
+        description: 'Your order is being prepared with care.',
+      });
+    } catch (error) {
+      console.error('Error submitting order:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to submit order',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleCallWaiter = () => {
+  const handleCallWaiter = async () => {
     if (session.isLocked) return;
     
     if ('vibrate' in navigator) {
       navigator.vibrate(50);
     }
     
-    callWaiter(tableId);
-    toast({
-      title: '🔔 Staff Notified',
-      description: 'Someone will be with you shortly.',
-    });
+    try {
+      await callWaiter(tableId);
+      toast({
+        title: '🔔 Staff Notified',
+        description: 'Someone will be with you shortly.',
+      });
+    } catch (error) {
+      console.error('Error calling waiter:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to notify staff',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handlePaymentSelect = (method: 'cash' | 'card') => {
+  const handlePaymentSelect = async (method: 'cash' | 'card') => {
     setPaymentModalOpen(false);
-    requestBill(tableId, method);
-    toast({
-      title: '💳 Bill Requested',
-      description: `Payment method: ${method === 'cash' ? 'Cash' : 'Card'}`,
-    });
+    try {
+      await requestBill(tableId, method);
+      toast({
+        title: '💳 Bill Requested',
+        description: `Payment method: ${method === 'cash' ? 'Cash' : 'Card'}`,
+      });
+    } catch (error) {
+      console.error('Error requesting bill:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to request bill',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading menu...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (session.isLocked) {
     return (
