@@ -718,6 +718,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [loadTableSessions]);
 
   const resetTable = useCallback(async (tableId: string) => {
+    // Optimistic update: clear everything immediately
+    setTables(prev => {
+      const updated = { ...prev };
+      if (!updated[tableId]) return updated;
+      
+      updated[tableId] = {
+        ...updated[tableId],
+        isLocked: false,
+        isVip: false,
+        cart: [],
+        requests: [],
+      };
+      
+      return updated;
+    });
+
     try {
       // Clear cart
       const { error: cartError } = await supabase
@@ -727,6 +743,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       if (cartError) {
         console.error('Error clearing cart:', cartError);
+        // Rollback on error
+        loadTableSessions();
         throw cartError;
       }
 
@@ -738,6 +756,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       if (requestsError) {
         console.error('Error deleting requests:', requestsError);
+        // Rollback on error
+        loadTableSessions();
         throw requestsError;
       }
 
@@ -749,11 +769,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       if (tableError) {
         console.error('Error resetting table status:', tableError);
+        // Rollback on error
+        loadTableSessions();
         throw tableError;
       }
 
-      // Reload table sessions to reflect changes
-      loadTableSessions();
+      // Real-time subscription will sync, but optimistic update makes UI feel instant
     } catch (error) {
       console.error('Error resetting table:', error);
       throw error; // Re-throw so UI can handle it
