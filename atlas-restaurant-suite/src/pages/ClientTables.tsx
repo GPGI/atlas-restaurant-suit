@@ -1,22 +1,23 @@
 import React from 'react';
 import { Utensils } from 'lucide-react';
-import { useRestaurant } from '@/context/RestaurantContext';
-import ClientTableCard from '@/components/ClientTableCard';
+import { QRCodeSVG } from 'qrcode.react';
 
 const ClientTables: React.FC = () => {
-  const { tables } = useRestaurant();
-  
   // Get all tables 1-10
   const tableIds = Array.from({ length: 10 }, (_, i) => 
     `Table_${String(i + 1).padStart(2, '0')}`
   );
 
-  // Count available tables
-  const availableCount = tableIds.filter(tableId => {
-    const session = tables[tableId];
-    if (!session) return true;
-    return session.requests.length === 0 && session.cart.length === 0 && !session.isLocked;
-  }).length;
+  // Get the current origin (domain) to generate full URLs
+  const getMenuUrl = (tableId: string) => {
+    const origin = window.location.origin;
+    return `${origin}/menu?table=${tableId}`;
+  };
+
+  // Get table number for display (e.g., "01" -> "1")
+  const getTableNumber = (tableId: string) => {
+    return tableId.replace('Table_', '');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,7 +30,7 @@ const ClientTables: React.FC = () => {
                 ATLAS HOUSE
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {availableCount} of {tableIds.length} tables available
+                Scan QR code to view menu
               </p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -39,38 +40,34 @@ const ClientTables: React.FC = () => {
         </div>
       </header>
 
-      {/* Tables Grid */}
+      {/* QR Codes Grid */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {tableIds.map((tableId, index) => {
-            const session = tables[tableId] || {
-              tableId,
-              isLocked: false,
-              cart: [],
-              requests: [],
-              isVip: false,
-            };
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          {tableIds.map((tableId) => {
+            const menuUrl = getMenuUrl(tableId);
+            const tableNumber = getTableNumber(tableId);
             
             return (
-              <ClientTableCard
+              <div
                 key={tableId}
-                session={session}
-                index={index}
-              />
+                className="flex flex-col items-center gap-3 p-4 bg-card border border-border rounded-lg hover:border-primary/30 transition-colors"
+              >
+                <div className="bg-white p-3 rounded-lg">
+                  <QRCodeSVG
+                    value={menuUrl}
+                    size={160}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-foreground">
+                    Table {tableNumber}
+                  </p>
+                </div>
+              </div>
             );
           })}
-        </div>
-
-        {/* Legend */}
-        <div className="mt-10 flex items-center justify-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-success" />
-            <span className="text-muted-foreground">Available</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-destructive" />
-            <span className="text-muted-foreground">Occupied</span>
-          </div>
         </div>
       </main>
     </div>
