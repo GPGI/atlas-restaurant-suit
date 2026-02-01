@@ -432,7 +432,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         throw error; // Re-throw so UI can handle it
       }
     }
-  }, [loadTableSessions, tableId]);
+  }, [loadTableSessions]);
 
   const removeFromCart = useCallback(async (tableId: string, itemId: string) => {
     try {
