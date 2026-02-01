@@ -923,6 +923,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const resetTable = useCallback(async (tableId: string) => {
     // Optimistic update: clear everything immediately
+    // This ensures UI updates instantly before database operations complete
     setTables(prev => {
       const updated = { ...prev };
       if (!updated[tableId]) return updated;
@@ -932,11 +933,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isLocked: false,
         isVip: false,
         cart: [],
-        requests: [],
+        requests: [], // Clear all requests immediately - they will be deleted from DB
       };
       
       return updated;
     });
+    
+    // Mark this table as being reset to prevent real-time from showing old requests
+    setPaidTables(prev => new Set(prev).add(tableId));
 
     try {
       console.log(`Starting reset for ${tableId} - fetching data directly from database...`);
