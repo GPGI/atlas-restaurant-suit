@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Utensils, QrCode, Info } from 'lucide-react';
+import { Utensils, QrCode } from 'lucide-react';
 import { useRestaurant } from '@/context/RestaurantContext';
 import { getTranslations, getStoredLanguage, type Language } from '@/utils/i18n';
 import QRCodeCard from '@/components/QRCodeCard';
@@ -54,16 +54,6 @@ const ClientTables: React.FC = () => {
           </div>
         </div>
       </header>
-
-      {/* Instructions Banner */}
-      <div className="bg-primary/5 border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Info className="h-4 w-4" />
-            <span>{t.instructions}</span>
-          </div>
-        </div>
-      </div>
 
       {/* QR Codes Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
