@@ -107,7 +107,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .select('*')
           .order('cat', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error loading menu items:', error);
+          console.error('Error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          // Fallback to default menu items if Supabase fails
+          setMenuItems(defaultMenuItems);
+          return;
+        }
 
         if (data && data.length > 0) {
           // Map database fields to interface
@@ -120,9 +131,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             description: item.description || undefined,
           }));
           setMenuItems(mappedItems);
+        } else {
+          // If no data, use defaults
+          setMenuItems(defaultMenuItems);
         }
       } catch (error) {
         console.error('Error loading menu items:', error);
+        // Fallback to default menu items
+        setMenuItems(defaultMenuItems);
       }
     };
 
@@ -138,7 +154,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .from('restaurant_tables')
           .select('*');
 
-        if (tablesError) throw tablesError;
+        if (tablesError) {
+          console.error('Supabase error loading tables:', tablesError);
+          console.error('Error details:', {
+            message: tablesError.message,
+            details: tablesError.details,
+            hint: tablesError.hint,
+            code: tablesError.code,
+          });
+          // Fallback to default tables
+          setTables(defaultTables);
+          setLoading(false);
+          return;
+        }
 
         // Load all cart items
         const { data: cartData, error: cartError } = await supabase
@@ -148,7 +176,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             menu_items (id, name, price)
           `);
 
-        if (cartError) throw cartError;
+        if (cartError) {
+          console.error('Supabase error loading cart items:', cartError);
+          // Continue with empty cart if cart fails
+        }
 
         // Load all table requests
         const { data: requestsData, error: requestsError } = await supabase
@@ -156,7 +187,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .select('*')
           .order('timestamp', { ascending: false });
 
-        if (requestsError) throw requestsError;
+        if (requestsError) {
+          console.error('Supabase error loading requests:', requestsError);
+          // Continue with empty requests if requests fail
+        }
 
         // Build table sessions
         const sessions: Record<string, TableSession> = {};
@@ -200,6 +234,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setLoading(false);
       } catch (error) {
         console.error('Error loading table sessions:', error);
+        // Fallback to default tables on error
+        setTables(defaultTables);
         setLoading(false);
       }
     };

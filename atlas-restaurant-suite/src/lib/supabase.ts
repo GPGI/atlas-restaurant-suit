@@ -7,4 +7,14 @@ if (!supabaseAnonKey) {
   console.warn('VITE_SUPABASE_ANON_KEY is not set. Supabase features will not work.');
 }
 
+// Log configuration (without exposing the full key)
+if (import.meta.env.DEV) {
+  console.log('Supabase Configuration:', {
+    url: supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    keyLength: supabaseAnonKey?.length || 0,
+    usingEnvVars: !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
+  });
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
