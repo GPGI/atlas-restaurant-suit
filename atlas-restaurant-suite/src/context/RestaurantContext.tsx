@@ -630,6 +630,21 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const completeRequest = useCallback(async (tableId: string, requestId: string) => {
+    // Optimistic update: update local state immediately
+    setTables(prev => {
+      const updated = { ...prev };
+      if (!updated[tableId]) return updated;
+      
+      updated[tableId] = {
+        ...updated[tableId],
+        requests: updated[tableId].requests.map(req =>
+          req.id === requestId ? { ...req, status: 'completed' as const } : req
+        ),
+      };
+      
+      return updated;
+    });
+
     try {
       const { error } = await supabase
         .from('table_requests')
@@ -638,15 +653,35 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       if (error) {
         console.error('Error completing request:', error);
+        // Rollback on error
+        loadTableSessions();
         throw error;
       }
+      // Real-time subscription will sync
     } catch (error) {
       console.error('Error completing request:', error);
       throw error;
     }
-  }, []);
+  }, [loadTableSessions]);
 
   const markAsPaid = useCallback(async (tableId: string) => {
+    // Optimistic update: update local state immediately
+    setTables(prev => {
+      const updated = { ...prev };
+      if (!updated[tableId]) return updated;
+      
+      // Mark all pending requests as completed
+      updated[tableId] = {
+        ...updated[tableId],
+        isLocked: false,
+        requests: updated[tableId].requests.map(req => 
+          req.status === 'pending' ? { ...req, status: 'completed' as const } : req
+        ),
+      };
+      
+      return updated;
+    });
+
     try {
       // Mark all pending requests as completed
       const { error: updateError } = await supabase
@@ -657,6 +692,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       if (updateError) {
         console.error('Error marking requests as paid:', updateError);
+        // Rollback on error
+        loadTableSessions();
         throw updateError;
       }
 
@@ -668,11 +705,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       if (unlockError) {
         console.error('Error unlocking table:', unlockError);
+        // Rollback on error
+        loadTableSessions();
         throw unlockError;
       }
 
-      // Reload table sessions to reflect changes
-      loadTableSessions();
+      // Real-time subscription will sync, but optimistic update makes UI feel instant
     } catch (error) {
       console.error('Error marking as paid:', error);
       throw error;
