@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
-import { Send, Bell, CreditCard, Lock, ArrowLeft } from 'lucide-react';
+import { Send, Bell, CreditCard, Lock, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useRestaurant } from '@/context/RestaurantContext';
@@ -8,6 +8,7 @@ import MenuItemCard from '@/components/MenuItemCard';
 import CartSummary from '@/components/CartSummary';
 import PaymentModal from '@/components/PaymentModal';
 import { trackQRScan } from '@/utils/analytics';
+import { triggerHapticFeedback, isOnline } from '@/utils/optimization';
 
 const CustomerMenu: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -35,6 +36,20 @@ const CustomerMenu: React.FC = () => {
       trackQRScan(tableId);
     }
   }, [tableNumber, tableId]);
+
+  // Monitor online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   const {
     menuItems,
@@ -50,6 +65,9 @@ const CustomerMenu: React.FC = () => {
   } = useRestaurant();
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [loadingItems, setLoadingItems] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOffline, setIsOffline] = useState(!isOnline());
   
   const session = getTableSession(tableId);
   const cartTotal = getCartTotal(tableId);
@@ -60,7 +78,7 @@ const CustomerMenu: React.FC = () => {
     return session.requests.reduce((sum, r) => sum + r.total, 0) + cartTotal;
   }, [session.requests, cartTotal]);
 
-  // Group menu items by category
+  // Group menu items by category - memoized with proper dependency
   const groupedItems = useMemo(() => {
     return menuItems.reduce((acc, item) => {
       if (!acc[item.cat]) {
@@ -69,15 +87,28 @@ const CustomerMenu: React.FC = () => {
       acc[item.cat].push(item);
       return acc;
     }, {} as Record<string, typeof menuItems>);
-  }, []);
+  }, [menuItems]);
 
-  const getItemQuantity = (itemId: string) => {
+  const getItemQuantity = useCallback((itemId: string) => {
     const cartItem = session.cart.find(i => i.id === itemId);
     return cartItem?.quantity || 0;
-  };
+  }, [session.cart]);
 
-  const handleAddItem = async (item: typeof menuItems[0]) => {
-    if (session.isLocked) return;
+  // Debounce helper
+  const debounce = useCallback((func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  }, []);
+
+  const handleAddItem = useCallback(async (item: typeof menuItems[0]) => {
+    if (session.isLocked || loadingItems.has(item.id)) return;
+    
+    triggerHapticFeedback('light');
+    setLoadingItems(prev => new Set(prev).add(item.id));
+    
     try {
       await addToCart(tableId, {
         id: item.id,
@@ -85,34 +116,62 @@ const CustomerMenu: React.FC = () => {
         price: item.price,
         quantity: 1,
       });
-      // Show success feedback
-      toast({
-        title: '✅ Добавено',
-        description: `${item.name} е добавено в поръчката`,
-      });
+      // Only show toast on first add, not on subsequent adds
+      const currentQty = getItemQuantity(item.id);
+      if (currentQty === 1) {
+        toast({
+          title: '✅ Добавено',
+          description: `${item.name} е добавено в поръчката`,
+          duration: 2000,
+        });
+      }
     } catch (error) {
       console.error('Error adding item to cart:', error);
+      triggerHapticFeedback('heavy');
       toast({
         title: 'Грешка',
         description: 'Неуспешно добавяне на артикул. Моля опитайте отново.',
         variant: 'destructive',
       });
+    } finally {
+      setLoadingItems(prev => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
     }
-  };
+  }, [session.isLocked, loadingItems, tableId, addToCart, getItemQuantity, toast]);
 
-  const handleRemoveItem = async (itemId: string) => {
-    if (session.isLocked) return;
+  const handleRemoveItem = useCallback(async (itemId: string) => {
+    if (session.isLocked || loadingItems.has(itemId)) return;
+    
+    triggerHapticFeedback('light');
+    setLoadingItems(prev => new Set(prev).add(itemId));
+    
     try {
       const currentQty = getItemQuantity(itemId);
       await updateCartQuantity(tableId, itemId, currentQty - 1);
     } catch (error) {
       console.error('Error removing item from cart:', error);
+      triggerHapticFeedback('heavy');
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно премахване на артикул',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
     }
-  };
+  }, [session.isLocked, loadingItems, tableId, updateCartQuantity, getItemQuantity, toast]);
 
-  const handleSubmitOrder = async () => {
-    if (session.isLocked || cartItemCount === 0) return;
+  const handleSubmitOrder = useCallback(async () => {
+    if (session.isLocked || cartItemCount === 0 || isSubmitting) return;
     
+    setIsSubmitting(true);
     try {
       await submitOrder(tableId);
       toast({
@@ -123,11 +182,13 @@ const CustomerMenu: React.FC = () => {
       console.error('Error submitting order:', error);
       toast({
         title: 'Грешка',
-        description: 'Неуспешно изпращане на поръчка',
+        description: 'Неуспешно изпращане на поръчка. Моля опитайте отново.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }, [session.isLocked, cartItemCount, isSubmitting, tableId, submitOrder, toast]);
 
   const handleCallWaiter = async () => {
     if (session.isLocked) return;
@@ -199,50 +260,58 @@ const CustomerMenu: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen pb-32">
+    <div className="min-h-screen pb-24 sm:pb-28 md:pb-32" style={{ paddingBottom: 'max(6rem, env(safe-area-inset-bottom))' }}>
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/98 backdrop-blur-md border-b border-border/50">
-        <div className="max-w-3xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-5">
+      <header className="sticky top-0 z-40 bg-background/98 backdrop-blur-md border-b border-border/50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          {isOffline && (
+            <div className="mb-3 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-xs text-yellow-200 animate-fade-in">
+              ⚠️ Няма интернет връзка. Някои функции може да не работят.
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-5 min-w-0 flex-1">
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-9 w-9 rounded-full hover:bg-secondary/50 transition-colors"
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-full hover:bg-secondary/50 transition-colors touch-manipulation flex-shrink-0"
                 onClick={() => navigate('/')}
+                aria-label="Go back"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
-              <div>
-                <h1 className="font-display text-2xl font-light text-foreground tracking-wider">
+              <div className="min-w-0 flex-1">
+                <h1 className="font-display text-xl sm:text-2xl font-light text-foreground tracking-wider truncate">
                   ATLAS HOUSE
                 </h1>
-                <p className="text-xs text-muted-foreground mt-1 font-light tracking-wider uppercase">
+                <p className="text-xs text-muted-foreground mt-0.5 sm:mt-1 font-light tracking-wider uppercase truncate">
                   {tableId.replace('_', ' ')}
                 </p>
               </div>
             </div>
-            <CartSummary itemCount={cartItemCount} total={cartTotal} />
+            <div className="flex-shrink-0">
+              <CartSummary itemCount={cartItemCount} total={cartTotal} />
+            </div>
           </div>
         </div>
       </header>
 
       {/* Menu */}
-      <main className="max-w-3xl mx-auto px-6 py-8">
-        <div className="space-y-16 stagger-children">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
+        <div className="space-y-8 sm:space-y-12 md:space-y-16 stagger-children">
           {Object.entries(groupedItems).map(([category, items]) => (
             <section key={category} className="animate-fade-in">
               {/* Elegant Category Header */}
-              <div className="mb-8">
-                <h2 className="font-display text-2xl font-light text-foreground tracking-wide mb-2">
+              <div className="mb-4 sm:mb-6 md:mb-8">
+                <h2 className="font-display text-xl sm:text-2xl font-light text-foreground tracking-wide mb-2">
                   {category}
                 </h2>
-                <div className="h-px w-16 bg-primary/40" />
+                <div className="h-px w-12 sm:w-16 bg-primary/40" />
               </div>
               
               {/* Menu Items - Classic Restaurant Style */}
-              <div className="bg-card/30 backdrop-blur-sm rounded-lg border border-border/30 p-6 space-y-0">
-                {items.map((item, index) => (
+              <div className="bg-card/30 backdrop-blur-sm rounded-lg border border-border/30 p-4 sm:p-6 space-y-0">
+                {items.map((item) => (
                   <MenuItemCard
                     key={item.id}
                     id={item.id}
@@ -252,6 +321,7 @@ const CustomerMenu: React.FC = () => {
                     onAdd={() => handleAddItem(item)}
                     onRemove={() => handleRemoveItem(item.id)}
                     disabled={session.isLocked}
+                    isLoading={loadingItems.has(item.id)}
                   />
                 ))}
               </div>
@@ -261,32 +331,47 @@ const CustomerMenu: React.FC = () => {
       </main>
 
       {/* Fixed Bottom Actions */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/98 backdrop-blur-md border-t border-border/50 p-5 shadow-2xl">
-        <div className="max-w-3xl mx-auto space-y-3">
+      <div 
+        className="fixed bottom-0 left-0 right-0 bg-background/98 backdrop-blur-md border-t border-border/50 p-4 sm:p-5 shadow-2xl"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="max-w-3xl mx-auto space-y-2 sm:space-y-3">
           {/* Submit Order Button */}
           <Button
-            className="w-full btn-gold h-12 text-sm font-light tracking-wider uppercase shadow-lg hover:shadow-xl transition-all"
+            className="w-full btn-gold h-12 sm:h-14 text-sm font-light tracking-wider uppercase shadow-lg hover:shadow-xl transition-all touch-manipulation"
             onClick={handleSubmitOrder}
-            disabled={cartItemCount === 0}
+            disabled={cartItemCount === 0 || isSubmitting}
           >
-            <Send className="h-4 w-4 mr-2" />
-            Изпрати поръчка
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Изпращане...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Изпрати поръчка
+              </>
+            )}
           </Button>
           
           {/* Secondary Actions */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <Button
               variant="outline"
-              className="h-11 border-border/50 hover:bg-secondary/50 hover:border-primary/30 transition-all text-sm font-light"
+              className="h-11 sm:h-12 border-border/50 hover:bg-secondary/50 hover:border-primary/30 transition-all text-sm font-light touch-manipulation"
               onClick={handleCallWaiter}
+              disabled={session.isLocked}
             >
               <Bell className="h-4 w-4 mr-2" />
-              Сервитьор
+              <span className="hidden xs:inline">Сервитьор</span>
+              <span className="xs:hidden">Серв.</span>
             </Button>
             <Button
               variant="outline"
-              className="h-11 border-border/50 hover:bg-secondary/50 hover:border-primary/30 transition-all text-sm font-light"
+              className="h-11 sm:h-12 border-border/50 hover:bg-secondary/50 hover:border-primary/30 transition-all text-sm font-light touch-manipulation"
               onClick={() => setPaymentModalOpen(true)}
+              disabled={session.isLocked}
             >
               <CreditCard className="h-4 w-4 mr-2" />
               Сметка

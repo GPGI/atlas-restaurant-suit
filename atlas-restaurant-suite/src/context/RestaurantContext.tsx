@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { debounce, retryWithBackoff } from '@/utils/optimization';
 
 // Default menu items data
 export const defaultMenuItems = [
@@ -243,14 +244,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     loadTableSessions();
 
-    // Set up real-time subscriptions
+    // Debounced reload to prevent excessive API calls
+    const debouncedReload = debounce(() => {
+      loadTableSessions();
+    }, 500);
+
+    // Set up real-time subscriptions with debouncing
     const cartSubscription = supabase
       .channel('cart_changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'cart_items' },
         () => {
-          // Reload table sessions when cart changes
-          loadTableSessions();
+          // Debounced reload to prevent excessive calls
+          debouncedReload();
         }
       )
       .subscribe();
@@ -260,7 +266,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'table_requests' },
         () => {
-          loadTableSessions();
+          debouncedReload();
         }
       )
       .subscribe();
@@ -311,6 +317,36 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [tables]);
 
   const addToCart = useCallback(async (tableId: string, item: CartItem) => {
+    // Optimistic update: update local state immediately
+    setTables(prev => {
+      const updated = { ...prev };
+      if (!updated[tableId]) {
+        updated[tableId] = {
+          tableId,
+          isLocked: false,
+          cart: [],
+          requests: [],
+          isVip: false,
+        };
+      }
+      
+      const existingCartItem = updated[tableId].cart.find(ci => ci.id === item.id);
+      if (existingCartItem) {
+        updated[tableId] = {
+          ...updated[tableId],
+          cart: updated[tableId].cart.map(ci =>
+            ci.id === item.id ? { ...ci, quantity: ci.quantity + 1 } : ci
+          ),
+        };
+      } else {
+        updated[tableId] = {
+          ...updated[tableId],
+          cart: [...updated[tableId].cart, { ...item, quantity: 1 }],
+        };
+      }
+      return updated;
+    });
+
     try {
       // Check if item already exists in cart (use maybeSingle to avoid error when not found)
       const { data: existingCartItem, error: selectError } = await supabase
@@ -334,6 +370,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         
         if (updateError) {
           console.error('Error updating cart item:', updateError);
+          // Rollback optimistic update on error
+          loadTableSessions();
           throw updateError;
         }
       } else {
@@ -349,14 +387,52 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         
         if (insertError) {
           console.error('Error inserting cart item:', insertError);
+          // Rollback optimistic update on error
+          loadTableSessions();
           throw insertError;
         }
       }
+      // Real-time subscription will sync the state, but optimistic update makes UI feel instant
     } catch (error) {
       console.error('Error adding to cart:', error);
-      throw error; // Re-throw so UI can handle it
+      // Rollback on error - reload from server
+      loadTableSessions();
+      // Retry with exponential backoff for network errors
+      if ((error as any)?.code === 'PGRST301' || (error as any)?.message?.includes('fetch')) {
+        try {
+          await retryWithBackoff(async () => {
+            const { data: existingCartItem } = await supabase
+              .from('cart_items')
+              .select('*')
+              .eq('table_id', tableId)
+              .eq('menu_item_id', item.id)
+              .maybeSingle();
+            
+            if (existingCartItem) {
+              await supabase
+                .from('cart_items')
+                .update({ quantity: existingCartItem.quantity + 1 })
+                .eq('id', existingCartItem.id);
+            } else {
+              await supabase
+                .from('cart_items')
+                .insert({
+                  id: `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  table_id: tableId,
+                  menu_item_id: item.id,
+                  quantity: 1,
+                });
+            }
+          }, 3, 1000);
+          loadTableSessions(); // Reload after successful retry
+        } catch (retryError) {
+          throw error; // Throw original error if retry fails
+        }
+      } else {
+        throw error; // Re-throw so UI can handle it
+      }
     }
-  }, []);
+  }, [loadTableSessions, tableId]);
 
   const removeFromCart = useCallback(async (tableId: string, itemId: string) => {
     try {
@@ -377,6 +453,27 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const updateCartQuantity = useCallback(async (tableId: string, itemId: string, quantity: number) => {
+    // Optimistic update
+    setTables(prev => {
+      const updated = { ...prev };
+      if (!updated[tableId]) return updated;
+      
+      if (quantity <= 0) {
+        updated[tableId] = {
+          ...updated[tableId],
+          cart: updated[tableId].cart.filter(ci => ci.id !== itemId),
+        };
+      } else {
+        updated[tableId] = {
+          ...updated[tableId],
+          cart: updated[tableId].cart.map(ci =>
+            ci.id === itemId ? { ...ci, quantity } : ci
+          ),
+        };
+      }
+      return updated;
+    });
+
     try {
       if (quantity <= 0) {
         const { error } = await supabase
@@ -385,7 +482,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .eq('table_id', tableId)
           .eq('menu_item_id', itemId);
         
-        if (error) throw error;
+        if (error) {
+          loadTableSessions(); // Rollback
+          throw error;
+        }
       } else {
         const { data: cartItem, error: selectError } = await supabase
           .from('cart_items')
@@ -395,6 +495,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .maybeSingle();
 
         if (selectError && selectError.code !== 'PGRST116') {
+          loadTableSessions(); // Rollback
           throw selectError;
         }
 
@@ -404,14 +505,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             .update({ quantity })
             .eq('id', cartItem.id);
           
-          if (updateError) throw updateError;
+          if (updateError) {
+            loadTableSessions(); // Rollback
+            throw updateError;
+          }
         }
       }
+      // Real-time subscription will sync
     } catch (error) {
       console.error('Error updating cart quantity:', error);
       throw error;
     }
-  }, []);
+  }, [loadTableSessions]);
 
   const clearCart = useCallback(async (tableId: string) => {
     try {

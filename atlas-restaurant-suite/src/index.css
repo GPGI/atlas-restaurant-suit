@@ -83,6 +83,8 @@
     font-family: var(--font-body);
     background: var(--gradient-dark);
     min-height: 100vh;
+    /* Support for safe area insets on iOS */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -203,6 +205,36 @@
     animation: fade-in 0.4s ease-out forwards;
   }
 
+  /* Scale animation for buttons */
+  @keyframes scale-in {
+    from {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out forwards;
+  }
+
+  /* Pulse animation for quantity changes */
+  @keyframes pulse-quantity {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1);
+    }
+  }
+
+  .animate-pulse-quantity {
+    animation: pulse-quantity 0.3s ease-out;
+  }
+
   /* Stagger children animation */
   .stagger-children > * {
     opacity: 0;
@@ -219,6 +251,22 @@
   .stagger-children > *:nth-child(8) { animation-delay: 0.4s; }
   .stagger-children > *:nth-child(9) { animation-delay: 0.45s; }
   .stagger-children > *:nth-child(10) { animation-delay: 0.5s; }
+
+  /* Touch optimization */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Responsive breakpoint for extra small screens */
+  @media (min-width: 475px) {
+    .xs\:inline {
+      display: inline;
+    }
+    .xs\:hidden {
+      display: none;
+    }
+  }
 
   /* Shimmer effect */
   @keyframes shimmer {

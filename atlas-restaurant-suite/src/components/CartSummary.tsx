@@ -35,15 +35,15 @@ const CartSummary: React.FC<CartSummaryProps> = ({
   }
 
   return (
-    <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-3">
-      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-        <ShoppingBag className="h-4 w-4 text-primary" />
+    <div className="bg-card border border-border rounded-lg px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 animate-fade-in">
+      <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+        <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
       </div>
-      <div>
-        <p className="text-xs text-muted-foreground">
-          {itemCount} items
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground truncate">
+          {itemCount} {itemCount === 1 ? 'артикул' : 'артикула'}
         </p>
-        <p className="font-semibold text-foreground text-sm">
+        <p className="font-semibold text-foreground text-sm sm:text-base truncate">
           {total.toFixed(2)} лв
         </p>
       </div>

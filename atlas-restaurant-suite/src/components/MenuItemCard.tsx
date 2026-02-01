@@ -1,5 +1,5 @@
 import React from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface MenuItemCardProps {
@@ -12,6 +12,7 @@ interface MenuItemCardProps {
   onRemove: () => void;
   variant?: 'standard' | 'premium';
   disabled?: boolean;
+  isLoading?: boolean;
 }
 
 const MenuItemCard: React.FC<MenuItemCardProps> = ({
@@ -23,7 +24,25 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   onRemove,
   variant = 'standard',
   disabled = false,
+  isLoading = false,
 }) => {
+  // Haptic feedback for mobile
+  const triggerHaptic = () => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(30);
+    }
+  };
+
+  const handleAdd = () => {
+    triggerHaptic();
+    onAdd();
+  };
+
+  const handleRemove = () => {
+    triggerHaptic();
+    onRemove();
+  };
+
   if (variant === 'premium') {
     return (
       <div className="glass-card rounded-xl p-5 animate-fade-in">
@@ -40,30 +59,40 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             </p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             {quantity > 0 && (
               <>
                 <Button
                   size="icon"
                   variant="outline"
-                  className="h-9 w-9 rounded-full border-primary/30 hover:bg-primary/10"
-                  onClick={onRemove}
-                  disabled={disabled}
+                  className="h-11 w-11 sm:h-12 sm:w-12 rounded-full border-primary/30 hover:bg-primary/10 active:scale-95 transition-transform touch-manipulation"
+                  onClick={handleRemove}
+                  disabled={disabled || isLoading}
+                  aria-label={`Remove ${name}`}
                 >
-                  <Minus className="h-4 w-4" />
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Minus className="h-4 w-4 sm:h-5 sm:w-5" />
+                  )}
                 </Button>
-                <span className="w-8 text-center font-semibold text-foreground">
+                <span className="w-10 sm:w-12 text-center font-semibold text-foreground text-base sm:text-lg">
                   {quantity}
                 </span>
               </>
             )}
             <Button
               size="icon"
-              className="h-9 w-9 rounded-full btn-gold"
-              onClick={onAdd}
-              disabled={disabled}
+              className="h-11 w-11 sm:h-12 sm:w-12 rounded-full btn-gold active:scale-95 transition-transform touch-manipulation"
+              onClick={handleAdd}
+              disabled={disabled || isLoading}
+              aria-label={`Add ${name}`}
             >
-              <Plus className="h-4 w-4" />
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+              )}
             </Button>
           </div>
         </div>
@@ -72,37 +101,42 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   }
 
   return (
-    <div className="group relative py-5 border-b border-border/50 last:border-0 hover:border-primary/20 transition-colors duration-300 animate-fade-in">
-      <div className="flex items-center justify-between gap-6">
-        {/* Item Name and Price - Classic Restaurant Menu Style */}
-        <div className="flex-1 min-w-0 flex items-center gap-3">
-          <h3 className="font-display text-lg font-medium text-foreground tracking-tight flex-shrink-0">
+    <div className="group relative py-4 sm:py-5 border-b border-border/50 last:border-0 hover:border-primary/20 transition-colors duration-300 animate-fade-in">
+      <div className="flex items-center justify-between gap-3 sm:gap-4 md:gap-6">
+        {/* Item Name and Price - Classic Restaurant Style */}
+        <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3">
+          <h3 className="font-display text-base sm:text-lg font-medium text-foreground tracking-tight flex-shrink-0 truncate">
             {name}
           </h3>
-          <div className="flex-1 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-          <div className="flex items-baseline gap-1.5 flex-shrink-0">
-            <span className="text-lg font-semibold text-foreground">
+          <div className="hidden sm:flex flex-1 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
+          <div className="flex items-baseline gap-1 sm:gap-1.5 flex-shrink-0">
+            <span className="text-base sm:text-lg font-semibold text-foreground">
               {price.toFixed(2)}
             </span>
             <span className="text-xs text-muted-foreground font-light">лв</span>
           </div>
         </div>
         
-        {/* Quantity Controls - Elegant and Minimal */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Quantity Controls - Touch Optimized */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           {quantity > 0 && (
             <>
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8 rounded-full border border-border/30 hover:bg-secondary hover:border-primary/40 transition-all"
-                onClick={onRemove}
-                disabled={disabled}
+                className="h-11 w-11 sm:h-12 sm:w-12 rounded-full border border-border/30 hover:bg-secondary hover:border-primary/40 active:scale-95 transition-transform touch-manipulation"
+                onClick={handleRemove}
+                disabled={disabled || isLoading}
+                aria-label={`Remove ${name}`}
               >
-                <Minus className="h-3.5 w-3.5" />
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Minus className="h-4 w-4 sm:h-5 sm:w-5" />
+                )}
               </Button>
-              <div className="min-w-[28px] text-center">
-                <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-medium text-sm">
+              <div className="min-w-[36px] sm:min-w-[40px] text-center">
+                <span className="inline-flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 text-primary font-medium text-sm sm:text-base">
                   {quantity}
                 </span>
               </div>
@@ -111,11 +145,16 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 rounded-full border border-primary/30 hover:bg-primary/10 hover:border-primary/50 transition-all"
-            onClick={onAdd}
-            disabled={disabled}
+            className="h-11 w-11 sm:h-12 sm:w-12 rounded-full border border-primary/30 hover:bg-primary/10 hover:border-primary/50 active:scale-95 transition-transform touch-manipulation"
+            onClick={handleAdd}
+            disabled={disabled || isLoading}
+            aria-label={`Add ${name}`}
           >
-            <Plus className="h-3.5 w-3.5 text-primary" />
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : (
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            )}
           </Button>
         </div>
       </div>
