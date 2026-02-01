@@ -73,7 +73,6 @@ interface RestaurantContextType {
   completeRequest: (tableId: string, requestId: string) => Promise<void>;
   markAsPaid: (tableId: string) => Promise<void>;
   resetTable: (tableId: string) => Promise<void>;
-  resetAllTables: () => Promise<void>;
   getCartTotal: (tableId: string) => number;
   getCartItemCount: (tableId: string) => number;
   // Menu management
@@ -1076,27 +1075,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       loadTableSessions();
       throw error;
     }
-  }, [loadTableSessions, tables]);
-
-  const resetAllTables = useCallback(async () => {
-    try {
-      console.log('Starting reset for ALL tables...');
-      
-      // Get all table IDs (Table_01 through Table_10)
-      const allTableIds = Array.from({ length: 10 }, (_, i) => 
-        `Table_${String(i + 1).padStart(2, '0')}`
-      );
-
-      // Reset all tables in parallel
-      const resetPromises = allTableIds.map(tableId => resetTable(tableId));
-      await Promise.all(resetPromises);
-
-      console.log('🎉 Successfully reset ALL tables');
-    } catch (error) {
-      console.error('Error resetting all tables:', error);
-      throw error;
-    }
-  }, [resetTable]);
+  }, [loadTableSessions]);
 
   const getCartTotal = useCallback((tableId: string): number => {
     const table = tables[tableId];
@@ -1174,7 +1153,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     completeRequest,
     markAsPaid,
     resetTable,
-    resetAllTables,
     getCartTotal,
     getCartItemCount,
     addMenuItem,
@@ -1195,7 +1173,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     completeRequest,
     markAsPaid,
     resetTable,
-    resetAllTables,
     getCartTotal,
     getCartItemCount,
     addMenuItem,
