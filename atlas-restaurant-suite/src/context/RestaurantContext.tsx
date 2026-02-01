@@ -1126,7 +1126,17 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       console.log(`🎉 Successfully reset ${tableId}: All data moved to completed_orders and cleared from active tables`);
 
+      // Clear the reset flag after a delay to allow real-time deletion to complete
+      setTimeout(() => {
+        setPaidTables(prev => {
+          const next = new Set(prev);
+          next.delete(tableId);
+          return next;
+        });
+      }, 2000); // 2 second delay to ensure deletion completes
+
       // Step 7: Force reload to ensure UI is in sync with database
+      // Real-time subscription will also update, but this ensures consistency
       await loadTableSessions();
 
     } catch (error) {
