@@ -27,15 +27,15 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete }) => {
     >
       <div className="flex items-start justify-between gap-2 sm:gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1.5">
-            <span className="font-semibold text-xs sm:text-sm">{request.action}</span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0">
-              <Clock className="h-3 w-3" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
+            <span className="font-semibold text-sm sm:text-base">{request.action}</span>
+            <span className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1 flex-shrink-0">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               {time}
             </span>
           </div>
-          {/* Order details - fully visible, no truncation */}
-          <div className="text-xs text-muted-foreground mt-1.5 space-y-0.5">
+          {/* Order details - fully visible, no truncation, larger text */}
+          <div className="text-sm sm:text-base text-foreground/90 mt-2 space-y-1 font-medium">
             {request.details ? (
               request.details.includes(',') ? (
                 // If details contain commas, split and show each item on new line
@@ -55,7 +55,7 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete }) => {
             )}
           </div>
           {request.total > 0 && (
-            <p className="text-xs sm:text-sm font-semibold text-primary mt-2">
+            <p className="text-base sm:text-lg font-bold text-primary mt-2.5">
               {request.total.toFixed(2)} лв
             </p>
           )}
