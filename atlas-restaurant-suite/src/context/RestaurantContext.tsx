@@ -1031,12 +1031,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
 
-      // Step 4: Delete ALL requests from table_requests (including bill requests)
-      // This clears everything: orders, waiter calls, and bill requests
+      // Step 4: Delete ALL requests from table_requests directly in database
+      // This triggers real-time deletion events that will update all connected clients
+      // Delete ALL requests for this specific table (including completed, pending, everything)
       const { data: deletedRequests, error: requestsError } = await supabase
         .from('table_requests')
         .delete()
-        .eq('table_id', tableId) // Delete ALL requests, no filtering
+        .eq('table_id', tableId) // Delete ALL requests for this specific table
         .select();
 
       if (requestsError) {
@@ -1044,9 +1045,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadTableSessions();
         throw requestsError;
       }
-      console.log(`✅ Deleted ${deletedRequests?.length || 0} requests (including bills) from table_requests for ${tableId}`);
+      console.log(`✅ Deleted ${deletedRequests?.length || 0} requests from table_requests for ${tableId} (real-time deletion)`);
       
-      // Double-check: Verify deletion was successful
+      // Real-time subscription will automatically sync the deletion to all clients
+      // No need to manually reload - Supabase real-time will handle it
+      
+      // Double-check: Verify deletion was successful (for logging only)
       const { data: remainingRequests } = await supabase
         .from('table_requests')
         .select('id')
@@ -1054,11 +1058,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       if (remainingRequests && remainingRequests.length > 0) {
         console.warn(`⚠️ Warning: ${remainingRequests.length} requests still exist for ${tableId} after deletion. Force deleting...`);
-        // Force delete any remaining requests
+        // Force delete any remaining requests (this will also trigger real-time)
         await supabase
           .from('table_requests')
           .delete()
           .eq('table_id', tableId);
+        console.log(`✅ Force deleted remaining requests for ${tableId}`);
       }
 
       // Step 5: Delete ALL cart items (direct database operation)
