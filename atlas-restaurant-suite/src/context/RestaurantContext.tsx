@@ -294,8 +294,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const requestsSubscription = supabase
       .channel('requests_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'table_requests' },
-        () => {
+        { 
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public', 
+          table: 'table_requests' 
+        },
+        (payload) => {
+          console.log('Real-time table_requests change:', payload.eventType, payload);
+          // Debounced reload to prevent excessive calls
+          // This will handle INSERT, UPDATE, and DELETE events in real-time
           debouncedReload();
         }
       )
