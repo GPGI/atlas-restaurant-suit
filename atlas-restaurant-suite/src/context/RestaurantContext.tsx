@@ -681,24 +681,57 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [loadTableSessions]);
 
   const markAsPaid = useCallback(async (tableId: string) => {
-    // Optimistic update: update local state immediately
+    // Get current table data before clearing for archive
+    const currentTable = tables[tableId];
+    
+    // Optimistic update: clear paid orders immediately
     setTables(prev => {
       const updated = { ...prev };
       if (!updated[tableId]) return updated;
       
-      // Mark all pending requests as completed
+      // Remove all requests (they're being paid, so remove from view)
       updated[tableId] = {
         ...updated[tableId],
         isLocked: false,
-        requests: updated[tableId].requests.map(req => 
-          req.status === 'pending' ? { ...req, status: 'completed' as const } : req
-        ),
+        requests: [], // Clear all orders when paid
       };
       
       return updated;
     });
 
     try {
+      // Archive the paid session before removing
+      if (currentTable && currentTable.requests.length > 0) {
+        // Get all requests from database for archive
+        const { data: requestsData } = await supabase
+          .from('table_requests')
+          .select('*')
+          .eq('table_id', tableId);
+
+        const totalRevenue = currentTable.requests.reduce((sum, r) => sum + r.total, 0);
+        const sessionStartTime = currentTable.requests.length > 0 
+          ? Math.min(...currentTable.requests.map(r => r.timestamp))
+          : Date.now();
+        const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 60000);
+
+        // Archive the paid session
+        const { error: archiveError } = await supabase
+          .from('table_history_archive')
+          .insert({
+            id: `archive_${tableId}_${Date.now()}`,
+            table_id: tableId,
+            cart_items: [],
+            requests: requestsData || [],
+            total_revenue: totalRevenue,
+            session_duration_minutes: sessionDuration,
+          });
+
+        if (archiveError) {
+          console.error('Error archiving paid session:', archiveError);
+          // Continue even if archive fails
+        }
+      }
+
       // Mark all pending requests as completed
       const { error: updateError } = await supabase
         .from('table_requests')
@@ -711,6 +744,31 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Rollback on error
         loadTableSessions();
         throw updateError;
+      }
+
+      // Delete all completed requests (remove paid orders from view)
+      const { error: deleteError } = await supabase
+        .from('table_requests')
+        .delete()
+        .eq('table_id', tableId)
+        .eq('status', 'completed');
+      
+      if (deleteError) {
+        console.error('Error deleting paid requests:', deleteError);
+        // Rollback on error
+        loadTableSessions();
+        throw deleteError;
+      }
+
+      // Clear cart as well (paid orders shouldn't have active cart)
+      const { error: cartError } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('table_id', tableId);
+
+      if (cartError) {
+        console.error('Error clearing cart after payment:', cartError);
+        // Continue even if cart clear fails
       }
 
       // Unlock the table and start new session
@@ -734,7 +792,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.error('Error marking as paid:', error);
       throw error;
     }
-  }, [loadTableSessions]);
+  }, [loadTableSessions, tables]);
 
   const resetTable = useCallback(async (tableId: string) => {
     // Get current table data before clearing for archive
