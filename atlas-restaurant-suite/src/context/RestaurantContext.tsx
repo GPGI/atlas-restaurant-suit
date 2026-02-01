@@ -741,10 +741,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       // Delete ALL requests immediately (remove all orders from view when paid)
       // We archive them first, so we can delete all regardless of status
-      const { error: deleteError } = await supabase
+      // Use a more aggressive delete to ensure all requests are removed
+      const { data: deletedRequests, error: deleteError } = await supabase
         .from('table_requests')
         .delete()
-        .eq('table_id', tableId);
+        .eq('table_id', tableId)
+        .select();
       
       if (deleteError) {
         console.error('Error deleting requests:', deleteError);
@@ -752,6 +754,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadTableSessions();
         throw deleteError;
       }
+      
+      console.log(`Deleted ${deletedRequests?.length || 0} requests for ${tableId}`);
 
       // Clear cart as well (paid orders shouldn't have active cart)
       const { error: cartError } = await supabase
