@@ -104,41 +104,38 @@ const StaffDashboard: React.FC = () => {
   }, [markAsPaid, toast]);
 
   const handleResetTable = useCallback(async (tableId: string) => {
-    // Reset ALL tables when any reset button is clicked
-    if (!confirm(`Сигурни ли сте, че искате да нулирате ВСИЧКИ таблици?\n\nТова ще изтрие всички заявки и колички за всички таблици.`)) {
+    const tableName = tableId.replace('_', ' ');
+    if (!confirm(`Сигурни ли сте, че искате да нулирате ${tableName}?\n\nТова ще изтрие всички заявки и количката за тази таблица.`)) {
       return;
     }
     
     try {
-      // Reset all tables (1-10)
-      const resetPromises = tableIds.map(id => resetTable(id));
-      await Promise.all(resetPromises);
-      
+      await resetTable(tableId);
       toast({
-        title: '✅ Всички таблици са нулирани',
-        description: 'Всички таблици са нулирани успешно',
+        title: '✅ Таблицата е нулирана',
+        description: `${tableName} е нулирана успешно`,
         duration: 3000,
       });
     } catch (error) {
-      console.error('Error resetting tables:', error);
+      console.error('Error resetting table:', error);
       // Don't show error toast if it's a context error (likely a race condition)
       if (error instanceof Error && error.message.includes('RestaurantProvider')) {
         console.warn('Context error during reset (likely race condition), ignoring...');
         // Still show success since the operation likely completed
         toast({
-          title: '✅ Всички таблици са нулирани',
-          description: 'Всички таблици са нулирани успешно',
+          title: '✅ Таблицата е нулирана',
+          description: `${tableName} е нулирана успешно`,
           duration: 3000,
         });
         return;
       }
       toast({
         title: 'Грешка',
-        description: 'Неуспешно нулиране на таблици. Моля опитайте отново.',
+        description: 'Неуспешно нулиране на таблица. Моля опитайте отново.',
         variant: 'destructive',
       });
     }
-  }, [resetTable, toast, tableIds]);
+  }, [resetTable, toast]);
 
   return (
     <div className="min-h-screen pb-20 sm:pb-24">
