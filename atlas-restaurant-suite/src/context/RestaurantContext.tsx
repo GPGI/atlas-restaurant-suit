@@ -1017,6 +1017,21 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         throw requestsError;
       }
       console.log(`✅ Deleted ${deletedRequests?.length || 0} requests (including bills) from table_requests for ${tableId}`);
+      
+      // Double-check: Verify deletion was successful
+      const { data: remainingRequests } = await supabase
+        .from('table_requests')
+        .select('id')
+        .eq('table_id', tableId);
+      
+      if (remainingRequests && remainingRequests.length > 0) {
+        console.warn(`⚠️ Warning: ${remainingRequests.length} requests still exist for ${tableId} after deletion. Force deleting...`);
+        // Force delete any remaining requests
+        await supabase
+          .from('table_requests')
+          .delete()
+          .eq('table_id', tableId);
+      }
 
       // Step 5: Delete ALL cart items (direct database operation)
       const { data: deletedCart, error: cartError } = await supabase
