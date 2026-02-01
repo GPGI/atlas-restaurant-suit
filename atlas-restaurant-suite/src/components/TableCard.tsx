@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableSession } from '@/context/RestaurantContext';
@@ -17,23 +17,24 @@ const TableCard: React.FC<TableCardProps> = ({
   onCompleteRequest,
   onReset,
 }) => {
-  const pendingRequests = session.requests.filter(r => r.status === 'pending');
-  const completedRequests = session.requests.filter(r => r.status === 'completed');
-  const hasPending = pendingRequests.length > 0;
-  const hasActivity = session.requests.length > 0;
-  const billPaid = session.requests.some(
-    r => r.action === '💳 BILL REQUEST' && r.status === 'completed'
-  );
-
-  const totalBill = session.requests.reduce((sum, r) => sum + r.total, 0);
-
-  const getStatus = () => {
-    if (hasPending) return 'alert';
-    if (hasActivity) return 'occupied';
-    return 'free';
-  };
-
-  const status = getStatus();
+  // Memoize calculations for performance
+  const { pendingRequests, completedRequests, hasPending, hasActivity, billPaid, totalBill, status } = useMemo(() => {
+    const pending = session.requests.filter(r => r.status === 'pending');
+    const completed = session.requests.filter(r => r.status === 'completed');
+    const hasPending = pending.length > 0;
+    const hasActivity = session.requests.length > 0;
+    const billPaid = session.requests.some(
+      r => r.action === '💳 BILL REQUEST' && r.status === 'completed'
+    );
+    const totalBill = session.requests.reduce((sum, r) => sum + r.total, 0);
+    
+    let status: 'free' | 'occupied' | 'alert';
+    if (hasPending) status = 'alert';
+    else if (hasActivity) status = 'occupied';
+    else status = 'free';
+    
+    return { pendingRequests: pending, completedRequests: completed, hasPending, hasActivity, billPaid, totalBill, status };
+  }, [session.requests]);
 
   return (
     <div
@@ -45,31 +46,32 @@ const TableCard: React.FC<TableCardProps> = ({
       )}
     >
       {/* Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="font-display text-lg font-semibold">
+      <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <h3 className="font-display text-base sm:text-lg font-semibold truncate">
             {session.tableId.replace('_', ' ')}
           </h3>
-          <StatusBadge status={status} />
+          <StatusBadge status={status} className="flex-shrink-0" />
         </div>
         
         {billPaid && (
           <Button
             size="sm"
             variant="outline"
-            className="text-xs border-primary/30 hover:bg-primary/10"
+            className="text-xs border-primary/30 hover:bg-primary/10 h-8 sm:h-9 px-2 sm:px-3 touch-manipulation flex-shrink-0"
             onClick={onReset}
+            aria-label={`Reset ${session.tableId}`}
           >
-            <RotateCcw className="h-3 w-3 mr-1" />
-            Reset
+            <RotateCcw className="h-3 w-3 sm:mr-1" />
+            <span className="hidden sm:inline">Reset</span>
           </Button>
         )}
       </div>
 
       {/* Content */}
-      <div className="p-4 max-h-64 overflow-y-auto scrollbar-premium">
+      <div className="p-3 sm:p-4 max-h-56 sm:max-h-64 overflow-y-auto scrollbar-premium">
         {session.requests.length === 0 ? (
-          <p className="text-center text-muted-foreground text-sm py-6">
+          <p className="text-center text-muted-foreground text-xs sm:text-sm py-4 sm:py-6">
             No activity
           </p>
         ) : (
@@ -90,10 +92,10 @@ const TableCard: React.FC<TableCardProps> = ({
 
       {/* Footer with total */}
       {hasActivity && (
-        <div className="p-4 border-t border-border bg-secondary/20">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Running Total</span>
-            <span className="font-display text-xl font-bold text-primary">
+        <div className="p-3 sm:p-4 border-t border-border bg-secondary/20">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs sm:text-sm text-muted-foreground">Running Total</span>
+            <span className="font-display text-lg sm:text-xl font-bold text-primary truncate">
               {totalBill.toFixed(2)} лв
             </span>
           </div>

@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Utensils } from 'lucide-react';
+import { ArrowLeft, Utensils, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRestaurant } from '@/context/RestaurantContext';
 import TableCard from '@/components/TableCard';
+import { useToast } from '@/hooks/use-toast';
 
 // Audio for alert notification
 const playAlertSound = () => {
@@ -29,105 +30,132 @@ const playAlertSound = () => {
 
 const StaffDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { tables, completeRequest, resetTable, loading } = useRestaurant();
   const prevPendingCountRef = useRef<number>(0);
   
-  // Get all table IDs in order
-  const tableIds = Array.from({ length: 10 }, (_, i) => 
-    `Table_${String(i + 1).padStart(2, '0')}`
+  // Get all table IDs in order - memoized
+  const tableIds = useMemo(() => 
+    Array.from({ length: 10 }, (_, i) => 
+      `Table_${String(i + 1).padStart(2, '0')}`
+    ), []
   );
 
-  // Count total pending requests
-  const getTotalPendingCount = useCallback(() => {
+  // Count total pending requests - memoized
+  const totalPending = useMemo(() => {
     return Object.values(tables).reduce((count, table) => {
       return count + table.requests.filter(r => r.status === 'pending').length;
     }, 0);
   }, [tables]);
 
+  // Calculate total revenue - memoized
+  const totalRevenue = useMemo(() => {
+    return Object.values(tables).reduce((sum, table) => {
+      return sum + table.requests.reduce((reqSum, r) => reqSum + r.total, 0);
+    }, 0);
+  }, [tables]);
+
   // Play sound when new pending requests appear
   useEffect(() => {
-    const currentPendingCount = getTotalPendingCount();
-    
-    if (currentPendingCount > prevPendingCountRef.current) {
+    if (totalPending > prevPendingCountRef.current) {
       playAlertSound();
     }
-    
-    prevPendingCountRef.current = currentPendingCount;
-  }, [tables, getTotalPendingCount]);
+    prevPendingCountRef.current = totalPending;
+  }, [totalPending]);
 
   const handleCompleteRequest = useCallback(async (tableId: string, requestId: string) => {
     try {
       await completeRequest(tableId, requestId);
+      toast({
+        title: '✅ Заявката е завършена',
+        description: 'Заявката е маркирана като завършена',
+      });
     } catch (error) {
       console.error('Error completing request:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно завършване на заявка',
+        variant: 'destructive',
+      });
     }
-  }, [completeRequest]);
+  }, [completeRequest, toast]);
 
   const handleResetTable = useCallback(async (tableId: string) => {
+    if (!confirm(`Сигурни ли сте, че искате да нулирате ${tableId.replace('_', ' ')}?`)) {
+      return;
+    }
+    
     try {
       await resetTable(tableId);
+      toast({
+        title: '✅ Таблицата е нулирана',
+        description: `${tableId.replace('_', ' ')} е нулирана успешно`,
+      });
     } catch (error) {
       console.error('Error resetting table:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно нулиране на таблица',
+        variant: 'destructive',
+      });
     }
-  }, [resetTable]);
-
-  const totalPending = getTotalPendingCount();
-  const totalRevenue = Object.values(tables).reduce((sum, table) => {
-    return sum + table.requests.reduce((reqSum, r) => reqSum + r.total, 0);
-  }, 0);
+  }, [resetTable, toast]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-20 sm:pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-xl border-b border-border" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-10 w-10 rounded-full hover:bg-secondary"
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-full hover:bg-secondary touch-manipulation flex-shrink-0"
                 onClick={() => navigate('/')}
+                aria-label="Go back"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
-              <div>
-                <h1 className="font-display text-2xl font-bold text-gold tracking-wide">
+              <div className="min-w-0 flex-1 sm:flex-none">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-gold tracking-wide truncate">
                   ATLAS HOUSE
                 </h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">
                   Staff Dashboard
                 </p>
               </div>
             </div>
             
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 w-full sm:w-auto justify-between sm:justify-end">
               {/* Menu Editor Button */}
               <Button
                 variant="outline"
                 onClick={() => navigate('/admin/menu')}
-                className="gap-2"
+                className="gap-2 text-xs sm:text-sm h-9 sm:h-10 touch-manipulation"
+                aria-label="Edit menu"
               >
-                <Utensils className="h-4 w-4" />
-                Edit Menu
+                <Utensils className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Edit Menu</span>
+                <span className="sm:hidden">Menu</span>
               </Button>
               
               {/* Pending Alerts */}
-              <div className="text-center">
+              <div className="text-center min-w-[60px] sm:min-w-[80px]">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">
                   Pending
                 </p>
-                <p className={`font-display text-2xl font-bold ${totalPending > 0 ? 'text-destructive' : 'text-success'}`}>
+                <p className={`font-display text-xl sm:text-2xl font-bold ${totalPending > 0 ? 'text-destructive animate-pulse' : 'text-success'}`}>
                   {totalPending}
                 </p>
               </div>
               
               {/* Total Revenue */}
-              <div className="text-center">
+              <div className="text-center min-w-[80px] sm:min-w-[100px]">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">
                   Revenue
                 </p>
-                <p className="font-display text-2xl font-bold text-primary">
+                <p className="font-display text-xl sm:text-2xl font-bold text-primary truncate">
                   {totalRevenue.toFixed(2)} лв
                 </p>
               </div>
@@ -137,16 +165,16 @@ const StaffDashboard: React.FC = () => {
       </header>
 
       {/* Table Grid */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Loading tables...</p>
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground">Зареждане на таблици...</p>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 stagger-children">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6 stagger-children">
             {tableIds.map(tableId => {
               const session = tables[tableId] || {
                 tableId,
@@ -170,20 +198,23 @@ const StaffDashboard: React.FC = () => {
       </main>
 
       {/* Legend */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border py-3">
-        <div className="container mx-auto px-6">
-          <div className="flex items-center justify-center gap-8 text-sm">
+      <footer 
+        className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl border-t border-border py-2 sm:py-3"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-center gap-4 sm:gap-6 lg:gap-8 text-xs sm:text-sm flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-success" />
-              <span className="text-muted-foreground">Free</span>
+              <span className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-success flex-shrink-0" />
+              <span className="text-muted-foreground whitespace-nowrap">Free</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-primary" />
-              <span className="text-muted-foreground">Occupied</span>
+              <span className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-primary flex-shrink-0" />
+              <span className="text-muted-foreground whitespace-nowrap">Occupied</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
-              <span className="text-muted-foreground">Pending Action</span>
+              <span className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-destructive animate-pulse flex-shrink-0" />
+              <span className="text-muted-foreground whitespace-nowrap">Pending Action</span>
             </div>
           </div>
         </div>
