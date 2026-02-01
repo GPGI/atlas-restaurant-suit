@@ -210,9 +210,25 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             quantity: ci.quantity,
           }));
 
-        // Get requests for this table
+        // Get requests for this table - only show current session requests
+        // Filter by session_started_at to hide previous session orders
+        const sessionStartedAt = table.session_started_at 
+          ? new Date(table.session_started_at).getTime() 
+          : 0;
+        
         const requests: TableRequest[] = (requestsData || [])
-          .filter(r => r.table_id === tableId)
+          .filter(r => {
+            // Only show requests from current session (created after session_started_at)
+            if (r.table_id === tableId) {
+              // If session_started_at exists, only show requests after that time
+              if (sessionStartedAt > 0) {
+                return r.timestamp >= sessionStartedAt;
+              }
+              // If no session_started_at, show all (backward compatibility)
+              return true;
+            }
+            return false;
+          })
           .map(r => ({
             id: r.id,
             action: r.action,
@@ -697,10 +713,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         throw updateError;
       }
 
-      // Unlock the table
+      // Unlock the table and start new session
       const { error: unlockError } = await supabase
         .from('restaurant_tables')
-        .update({ is_locked: false })
+        .update({ 
+          is_locked: false,
+          session_started_at: new Date().toISOString() // Start new session when marking as paid
+        })
         .eq('table_id', tableId);
       
       if (unlockError) {
@@ -802,10 +821,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         throw requestsError;
       }
 
-      // Reset table status
+      // Reset table status and start new session
       const { error: tableError } = await supabase
         .from('restaurant_tables')
-        .update({ is_locked: false, is_vip: false })
+        .update({ 
+          is_locked: false, 
+          is_vip: false,
+          session_started_at: new Date().toISOString() // Start new session
+        })
         .eq('table_id', tableId);
 
       if (tableError) {
