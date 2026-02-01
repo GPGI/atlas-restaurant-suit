@@ -757,12 +757,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Continue even if cart clear fails
       }
 
-      // Unlock the table and start new session
+      // Unlock the table and start new session (do this BEFORE real-time reload)
+      // This ensures the next data load filters out old orders
+      const newSessionStart = new Date().toISOString();
       const { error: unlockError } = await supabase
         .from('restaurant_tables')
         .update({ 
           is_locked: false,
-          session_started_at: new Date().toISOString() // Start new session when marking as paid
+          session_started_at: newSessionStart // Start new session when marking as paid
         })
         .eq('table_id', tableId);
       
@@ -772,6 +774,20 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadTableSessions();
         throw unlockError;
       }
+
+      // Double-check optimistic update to ensure requests stay cleared
+      // This prevents real-time subscription from showing old orders
+      setTables(prev => {
+        const updated = { ...prev };
+        if (updated[tableId]) {
+          updated[tableId] = {
+            ...updated[tableId],
+            isLocked: false,
+            requests: [], // Ensure requests stay empty
+          };
+        }
+        return updated;
+      });
 
       // Real-time subscription will sync, but optimistic update makes UI feel instant
     } catch (error) {
