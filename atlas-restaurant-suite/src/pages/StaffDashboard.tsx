@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Utensils, Loader2 } from 'lucide-react';
+import { ArrowLeft, Utensils, Loader2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRestaurant } from '@/context/RestaurantContext';
 import TableCard from '@/components/TableCard';
@@ -31,7 +31,8 @@ const playAlertSound = () => {
 const StaffDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { tables, completeRequest, markAsPaid, resetTable, loading } = useRestaurant();
+  const { tables, completeRequest, markAsPaid, resetTable, resetAllTables, loading } = useRestaurant();
+  const [isResettingAll, setIsResettingAll] = useState(false);
   const prevPendingCountRef = useRef<number>(0);
   
   // Get all table IDs in order - memoized
@@ -103,6 +104,31 @@ const StaffDashboard: React.FC = () => {
     }
   }, [markAsPaid, toast]);
 
+  const handleResetAllTables = useCallback(async () => {
+    if (!confirm(`Сигурни ли сте, че искате да нулирате ВСИЧКИ таблици?\n\nТова ще изтрие всички заявки и колички за всички таблици.\n\nТова действие не може да бъде отменено!`)) {
+      return;
+    }
+    
+    setIsResettingAll(true);
+    try {
+      await resetAllTables();
+      toast({
+        title: '✅ Всички таблици са нулирани',
+        description: 'Всички таблици са нулирани успешно',
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error resetting all tables:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно нулиране на таблици. Моля опитайте отново.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResettingAll(false);
+    }
+  }, [resetAllTables, toast]);
+
   const handleResetTable = useCallback(async (tableId: string) => {
     const tableName = tableId.replace('_', ' ');
     if (!confirm(`Сигурни ли сте, че искате да нулирате ${tableName}?\n\nТова ще изтрие всички заявки и количката.`)) {
@@ -164,6 +190,29 @@ const StaffDashboard: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 w-full sm:w-auto justify-between sm:justify-end">
+              {/* Reset All Tables Button */}
+              <Button
+                variant="destructive"
+                onClick={handleResetAllTables}
+                disabled={isResettingAll || loading}
+                className="gap-2 text-xs sm:text-sm h-9 sm:h-10 touch-manipulation"
+                aria-label="Reset all tables"
+              >
+                {isResettingAll ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                    <span className="hidden sm:inline">Resetting...</span>
+                    <span className="sm:hidden">...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Reset All</span>
+                    <span className="sm:hidden">Reset</span>
+                  </>
+                )}
+              </Button>
+              
               {/* Menu Editor Button */}
               <Button
                 variant="outline"

@@ -73,6 +73,7 @@ interface RestaurantContextType {
   completeRequest: (tableId: string, requestId: string) => Promise<void>;
   markAsPaid: (tableId: string) => Promise<void>;
   resetTable: (tableId: string) => Promise<void>;
+  resetAllTables: () => Promise<void>;
   getCartTotal: (tableId: string) => number;
   getCartItemCount: (tableId: string) => number;
   // Menu management
