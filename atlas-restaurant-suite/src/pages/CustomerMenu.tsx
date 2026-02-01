@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { Send, Bell, CreditCard, Lock, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -7,11 +7,34 @@ import { useRestaurant } from '@/context/RestaurantContext';
 import MenuItemCard from '@/components/MenuItemCard';
 import CartSummary from '@/components/CartSummary';
 import PaymentModal from '@/components/PaymentModal';
+import { trackQRScan } from '@/utils/analytics';
 
 const CustomerMenu: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const tableId = searchParams.get('table') || 'Table_01';
+  const { tableNumber } = useParams();
+  const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Support both /menu?table=Table_01 and /t/1 formats
+  const getTableId = () => {
+    if (tableNumber) {
+      // Convert /t/1 to Table_01 format
+      const num = parseInt(tableNumber);
+      if (!isNaN(num) && num >= 1 && num <= 10) {
+        return `Table_${String(num).padStart(2, '0')}`;
+      }
+    }
+    return searchParams.get('table') || 'Table_01';
+  };
+  
+  const tableId = getTableId();
+  
+  // Track QR code scan analytics
+  useEffect(() => {
+    if (tableNumber) {
+      trackQRScan(tableId);
+    }
+  }, [tableNumber, tableId]);
   
   const {
     menuItems,
@@ -25,7 +48,6 @@ const CustomerMenu: React.FC = () => {
     getCartItemCount,
   } = useRestaurant();
 
-  const navigate = useNavigate();
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   
   const session = getTableSession(tableId);

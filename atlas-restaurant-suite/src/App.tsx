@@ -23,6 +23,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<ClientTables />} />
             <Route path="/menu" element={<CustomerMenu />} />
+            <Route path="/t/:tableNumber" element={<CustomerMenu />} />
             <Route path="/admin" element={<StaffDashboard />} />
             <Route path="/admin/menu" element={<MenuEditor />} />
             <Route path="/index" element={<Index />} />
