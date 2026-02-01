@@ -867,7 +867,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     try {
-      // Get all data directly from database (more reliable than state)
+      console.log(`Starting reset for ${tableId} - fetching data directly from database...`);
+
+      // Step 1: Get all data directly from database (direct database connection)
       const [cartResult, requestsResult] = await Promise.all([
         supabase
           .from('cart_items')
@@ -879,17 +881,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .eq('table_id', tableId)
       ]);
 
+      if (cartResult.error) {
+        console.error('Error fetching cart:', cartResult.error);
+        throw cartResult.error;
+      }
+      if (requestsResult.error) {
+        console.error('Error fetching requests:', requestsResult.error);
+        throw requestsResult.error;
+      }
+
       const cartData = cartResult.data || [];
       const requestsData = requestsResult.data || [];
 
-      // Calculate session info from database data
-      const sessionStartTime = requestsData.length > 0 
-        ? Math.min(...requestsData.map(r => r.timestamp))
-        : Date.now();
-      const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 60000);
-      const totalRevenue = requestsData.reduce((sum, r) => sum + parseFloat(r.total || '0'), 0);
+      console.log(`Found ${cartData.length} cart items and ${requestsData.length} requests for ${tableId}`);
 
-      // Move requests to completed_orders before archiving (direct database operation)
+      // Step 2: Move ALL requests to completed_orders (direct database operation)
+      // This includes: orders, waiter calls, bill requests - everything
       if (requestsData.length > 0) {
         const completedOrders = requestsData.map(req => ({
           id: req.id,
@@ -902,21 +909,26 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           payment_method: req.payment_method || null,
         }));
 
-        const { error: moveError } = await supabase
+        const { data: insertedOrders, error: moveError } = await supabase
           .from('completed_orders')
           .insert(completedOrders)
           .select();
 
         if (moveError) {
           console.error('Error moving to completed_orders:', moveError);
-          // Continue even if move fails
-        } else {
-          console.log(`Moved ${completedOrders.length} orders to completed_orders for ${tableId}`);
+          throw moveError;
         }
+        console.log(`✅ Moved ${insertedOrders?.length || completedOrders.length} requests to completed_orders for ${tableId}`);
       }
 
-      // Archive the history (direct database operation)
+      // Step 3: Archive the session (direct database operation)
       if (cartData.length > 0 || requestsData.length > 0) {
+        const sessionStartTime = requestsData.length > 0 
+          ? Math.min(...requestsData.map(r => r.timestamp))
+          : Date.now();
+        const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 60000);
+        const totalRevenue = requestsData.reduce((sum, r) => sum + parseFloat(r.total || '0'), 0);
+
         const { error: archiveError } = await supabase
           .from('table_history_archive')
           .insert({
@@ -929,12 +941,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           });
 
         if (archiveError) {
-          console.error('Error archiving table history:', archiveError);
-          // Continue with reset even if archive fails
+          console.error('Error archiving (non-critical):', archiveError);
+          // Continue even if archive fails
+        } else {
+          console.log(`✅ Archived session for ${tableId}`);
         }
       }
 
-      // Delete all requests from table_requests (direct database operation)
+      // Step 4: Delete ALL requests from table_requests (direct database operation)
       const { data: deletedRequests, error: requestsError } = await supabase
         .from('table_requests')
         .delete()
@@ -946,9 +960,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadTableSessions();
         throw requestsError;
       }
-      console.log(`Deleted ${deletedRequests?.length || 0} requests from table_requests for ${tableId}`);
+      console.log(`✅ Deleted ${deletedRequests?.length || 0} requests from table_requests for ${tableId}`);
 
-      // Clear cart (direct database operation)
+      // Step 5: Delete ALL cart items (direct database operation)
       const { data: deletedCart, error: cartError } = await supabase
         .from('cart_items')
         .delete()
@@ -956,13 +970,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .select();
 
       if (cartError) {
-        console.error('Error clearing cart:', cartError);
+        console.error('Error deleting cart:', cartError);
         loadTableSessions();
         throw cartError;
       }
-      console.log(`Deleted ${deletedCart?.length || 0} cart items for ${tableId}`);
+      console.log(`✅ Deleted ${deletedCart?.length || 0} cart items for ${tableId}`);
 
-      // Reset table status and start new session (direct database operation)
+      // Step 6: Reset table status and start new session (direct database operation)
       const { error: tableError } = await supabase
         .from('restaurant_tables')
         .update({ 
@@ -977,14 +991,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadTableSessions();
         throw tableError;
       }
+      console.log(`✅ Reset table status for ${tableId}`);
 
-      console.log(`Successfully reset ${tableId} - all data cleared and moved to completed_orders`);
+      console.log(`🎉 Successfully reset ${tableId}: All data moved to completed_orders and cleared from active tables`);
 
-      // Force reload to ensure UI is in sync with database
+      // Step 7: Force reload to ensure UI is in sync with database
       await loadTableSessions();
 
     } catch (error) {
-      console.error('Error resetting table:', error);
+      console.error('❌ Error resetting table:', error);
       // Reload on error to show actual database state
       loadTableSessions();
       throw error;
