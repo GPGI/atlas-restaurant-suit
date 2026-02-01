@@ -81,7 +81,8 @@ const StaffDashboard: React.FC = () => {
   }, [completeRequest, toast]);
 
   const handleResetTable = useCallback(async (tableId: string) => {
-    if (!confirm(`Сигурни ли сте, че искате да нулирате ${tableId.replace('_', ' ')}?`)) {
+    const tableName = tableId.replace('_', ' ');
+    if (!confirm(`Сигурни ли сте, че искате да нулирате ${tableName}?\n\nТова ще изтрие всички заявки и количката.`)) {
       return;
     }
     
@@ -89,13 +90,14 @@ const StaffDashboard: React.FC = () => {
       await resetTable(tableId);
       toast({
         title: '✅ Таблицата е нулирана',
-        description: `${tableId.replace('_', ' ')} е нулирана успешно`,
+        description: `${tableName} е нулирана успешно`,
+        duration: 3000,
       });
     } catch (error) {
       console.error('Error resetting table:', error);
       toast({
         title: 'Грешка',
-        description: 'Неуспешно нулиране на таблица',
+        description: 'Неуспешно нулиране на таблица. Моля опитайте отново.',
         variant: 'destructive',
       });
     }

@@ -642,26 +642,45 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const resetTable = useCallback(async (tableId: string) => {
     try {
       // Clear cart
-      await supabase
+      const { error: cartError } = await supabase
         .from('cart_items')
         .delete()
         .eq('table_id', tableId);
 
+      if (cartError) {
+        console.error('Error clearing cart:', cartError);
+        throw cartError;
+      }
+
       // Delete all requests
-      await supabase
+      const { error: requestsError } = await supabase
         .from('table_requests')
         .delete()
         .eq('table_id', tableId);
 
+      if (requestsError) {
+        console.error('Error deleting requests:', requestsError);
+        throw requestsError;
+      }
+
       // Reset table status
-      await supabase
+      const { error: tableError } = await supabase
         .from('restaurant_tables')
         .update({ is_locked: false, is_vip: false })
         .eq('table_id', tableId);
+
+      if (tableError) {
+        console.error('Error resetting table status:', tableError);
+        throw tableError;
+      }
+
+      // Reload table sessions to reflect changes
+      loadTableSessions();
     } catch (error) {
       console.error('Error resetting table:', error);
+      throw error; // Re-throw so UI can handle it
     }
-  }, []);
+  }, [loadTableSessions]);
 
   const getCartTotal = useCallback((tableId: string): number => {
     const table = tables[tableId];

@@ -54,7 +54,7 @@ const TableCard: React.FC<TableCardProps> = ({
           <StatusBadge status={status} className="flex-shrink-0" />
         </div>
         
-        {billPaid && (
+        {hasActivity && (
           <Button
             size="sm"
             variant="outline"
