@@ -690,39 +690,67 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const completeRequest = useCallback(async (tableId: string, requestId: string) => {
-    // Optimistic update: update local state immediately
+    // Get the request data before deleting (for moving to completed_orders)
+    const requestToComplete = tables[tableId]?.requests.find(r => r.id === requestId);
+    
+    // Optimistic update: remove request from local state immediately
     setTables(prev => {
       const updated = { ...prev };
       if (!updated[tableId]) return updated;
       
       updated[tableId] = {
         ...updated[tableId],
-        requests: updated[tableId].requests.map(req =>
-          req.id === requestId ? { ...req, status: 'completed' as const } : req
-        ),
+        requests: updated[tableId].requests.filter(req => req.id !== requestId),
       };
       
       return updated;
     });
 
     try {
+      // Move request to completed_orders before deleting
+      if (requestToComplete) {
+        const { error: moveError } = await supabase
+          .from('completed_orders')
+          .upsert({
+            id: `completed_${requestId}_${Date.now()}`,
+            table_id: tableId,
+            action: requestToComplete.action,
+            details: requestToComplete.details || '',
+            total: requestToComplete.total,
+            status: 'completed',
+            timestamp: requestToComplete.timestamp,
+            payment_method: requestToComplete.paymentMethod || null,
+          }, {
+            onConflict: 'id',
+            ignoreDuplicates: false
+          });
+
+        if (moveError) {
+          console.warn('Error moving to completed_orders (non-critical):', moveError);
+          // Continue with deletion even if move fails
+        }
+      }
+
+      // Delete request from table_requests (remove from active view)
       const { error } = await supabase
         .from('table_requests')
-        .update({ status: 'completed' })
+        .delete()
         .eq('id', requestId);
       
       if (error) {
-        console.error('Error completing request:', error);
+        console.error('Error deleting request:', error);
         // Rollback on error
         loadTableSessions();
         throw error;
       }
+      
+      console.log(`✅ Completed and removed request ${requestId} from table_requests`);
       // Real-time subscription will sync
     } catch (error) {
       console.error('Error completing request:', error);
       throw error;
     }
-  }, [loadTableSessions]);
+  }, [loadTableSessions, tables]);
 
   const markAsPaid = useCallback(async (tableId: string) => {
     // Get current table data before clearing for archive
