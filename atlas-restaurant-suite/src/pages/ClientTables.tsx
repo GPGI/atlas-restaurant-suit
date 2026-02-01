@@ -10,8 +10,11 @@ const ClientTables: React.FC = () => {
 
   // Get the current origin (domain) to generate full URLs
   const getMenuUrl = (tableId: string) => {
-    const origin = window.location.origin;
-    return `${origin}/menu?table=${tableId}`;
+    // Use window.location to get the full URL
+    const protocol = window.location.protocol; // http: or https:
+    const host = window.location.host; // domain:port
+    const url = `${protocol}//${host}/menu?table=${encodeURIComponent(tableId)}`;
+    return url;
   };
 
   // Get table number for display (e.g., "01" -> "1")
@@ -57,7 +60,7 @@ const ClientTables: React.FC = () => {
                     value={menuUrl}
                     size={160}
                     level="H"
-                    includeMargin={false}
+                    includeMargin={true}
                   />
                 </div>
                 <div className="text-center">
