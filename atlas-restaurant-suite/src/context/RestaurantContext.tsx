@@ -71,6 +71,7 @@ interface RestaurantContextType {
   callWaiter: (tableId: string) => Promise<void>;
   requestBill: (tableId: string, paymentMethod: 'cash' | 'card') => Promise<void>;
   completeRequest: (tableId: string, requestId: string) => Promise<void>;
+  markAsPaid: (tableId: string) => Promise<void>;
   resetTable: (tableId: string) => Promise<void>;
   getCartTotal: (tableId: string) => number;
   getCartItemCount: (tableId: string) => number;
@@ -630,14 +631,53 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const completeRequest = useCallback(async (tableId: string, requestId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('table_requests')
         .update({ status: 'completed' })
         .eq('id', requestId);
+      
+      if (error) {
+        console.error('Error completing request:', error);
+        throw error;
+      }
     } catch (error) {
       console.error('Error completing request:', error);
+      throw error;
     }
   }, []);
+
+  const markAsPaid = useCallback(async (tableId: string) => {
+    try {
+      // Mark all pending requests as completed
+      const { error: updateError } = await supabase
+        .from('table_requests')
+        .update({ status: 'completed' })
+        .eq('table_id', tableId)
+        .eq('status', 'pending');
+      
+      if (updateError) {
+        console.error('Error marking requests as paid:', updateError);
+        throw updateError;
+      }
+
+      // Unlock the table
+      const { error: unlockError } = await supabase
+        .from('restaurant_tables')
+        .update({ is_locked: false })
+        .eq('table_id', tableId);
+      
+      if (unlockError) {
+        console.error('Error unlocking table:', unlockError);
+        throw unlockError;
+      }
+
+      // Reload table sessions to reflect changes
+      loadTableSessions();
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+      throw error;
+    }
+  }, [loadTableSessions]);
 
   const resetTable = useCallback(async (tableId: string) => {
     try {

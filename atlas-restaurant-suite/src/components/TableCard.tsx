@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableSession } from '@/context/RestaurantContext';
 import StatusBadge from './StatusBadge';
@@ -9,12 +9,14 @@ import { cn } from '@/lib/utils';
 interface TableCardProps {
   session: TableSession;
   onCompleteRequest: (requestId: string) => void;
+  onMarkAsPaid: () => void;
   onReset: () => void;
 }
 
 const TableCard: React.FC<TableCardProps> = ({
   session,
   onCompleteRequest,
+  onMarkAsPaid,
   onReset,
 }) => {
   // Memoize calculations for performance
@@ -54,18 +56,33 @@ const TableCard: React.FC<TableCardProps> = ({
           <StatusBadge status={status} className="flex-shrink-0" />
         </div>
         
-        {hasActivity && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs border-primary/30 hover:bg-primary/10 h-8 sm:h-9 px-2 sm:px-3 touch-manipulation flex-shrink-0"
-            onClick={onReset}
-            aria-label={`Reset ${session.tableId}`}
-          >
-            <RotateCcw className="h-3 w-3 sm:mr-1" />
-            <span className="hidden sm:inline">Reset</span>
-          </Button>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {hasPending && !session.isLocked && (
+            <Button
+              size="sm"
+              className="btn-gold text-xs h-8 sm:h-9 px-2 sm:px-3 touch-manipulation"
+              onClick={onMarkAsPaid}
+              aria-label={`Mark ${session.tableId} as paid`}
+            >
+              <CheckCircle2 className="h-3 w-3 sm:mr-1" />
+              <span className="hidden sm:inline">Mark Paid</span>
+              <span className="sm:hidden">Paid</span>
+            </Button>
+          )}
+          {hasActivity && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-primary/30 hover:bg-primary/10 h-8 sm:h-9 px-2 sm:px-3 touch-manipulation"
+              onClick={onReset}
+              aria-label={`Reset ${session.tableId}`}
+            >
+              <RotateCcw className="h-3 w-3 sm:mr-1" />
+              <span className="hidden sm:inline">Reset</span>
+              <span className="sm:hidden">Rst</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Content */}

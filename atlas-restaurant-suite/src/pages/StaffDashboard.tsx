@@ -31,7 +31,7 @@ const playAlertSound = () => {
 const StaffDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { tables, completeRequest, resetTable, loading } = useRestaurant();
+  const { tables, completeRequest, markAsPaid, resetTable, loading } = useRestaurant();
   const prevPendingCountRef = useRef<number>(0);
   
   // Get all table IDs in order - memoized
@@ -79,6 +79,29 @@ const StaffDashboard: React.FC = () => {
       });
     }
   }, [completeRequest, toast]);
+
+  const handleMarkAsPaid = useCallback(async (tableId: string) => {
+    const tableName = tableId.replace('_', ' ');
+    if (!confirm(`Маркиране на ${tableName} като платена?\n\nТова ще завърши всички чакащи заявки и ще отключи таблицата.`)) {
+      return;
+    }
+    
+    try {
+      await markAsPaid(tableId);
+      toast({
+        title: '✅ Платено',
+        description: `${tableName} е маркирана като платена и е отключена`,
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+      toast({
+        title: 'Грешка',
+        description: 'Неуспешно маркиране като платена. Моля опитайте отново.',
+        variant: 'destructive',
+      });
+    }
+  }, [markAsPaid, toast]);
 
   const handleResetTable = useCallback(async (tableId: string) => {
     const tableName = tableId.replace('_', ' ');
@@ -191,6 +214,7 @@ const StaffDashboard: React.FC = () => {
                   key={tableId}
                   session={session}
                   onCompleteRequest={(requestId) => handleCompleteRequest(tableId, requestId)}
+                  onMarkAsPaid={() => handleMarkAsPaid(tableId)}
                   onReset={() => handleResetTable(tableId)}
                 />
               );
