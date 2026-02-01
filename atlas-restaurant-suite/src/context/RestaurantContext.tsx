@@ -707,14 +707,45 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     try {
-      // Archive the paid session before removing
-      if (currentTable && currentTable.requests.length > 0) {
-        // Get all requests from database for archive
-        const { data: requestsData } = await supabase
-          .from('table_requests')
-          .select('*')
-          .eq('table_id', tableId);
+      // Get all requests from database to move to completed_orders
+      const { data: requestsData, error: fetchError } = await supabase
+        .from('table_requests')
+        .select('*')
+        .eq('table_id', tableId);
 
+      if (fetchError) {
+        console.error('Error fetching requests:', fetchError);
+        loadTableSessions();
+        throw fetchError;
+      }
+
+      // Move all requests to completed_orders table immediately
+      if (requestsData && requestsData.length > 0) {
+        const completedOrders = requestsData.map(req => ({
+          id: req.id,
+          table_id: req.table_id,
+          action: req.action,
+          details: req.details || '',
+          total: parseFloat(req.total || '0'),
+          status: 'completed',
+          timestamp: req.timestamp,
+          payment_method: req.payment_method || null,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('completed_orders')
+          .insert(completedOrders);
+
+        if (insertError) {
+          console.error('Error moving to completed_orders:', insertError);
+          // Continue even if insert fails, but log it
+        } else {
+          console.log(`Moved ${completedOrders.length} orders to completed_orders for ${tableId}`);
+        }
+      }
+
+      // Archive the paid session for historical records
+      if (currentTable && currentTable.requests.length > 0) {
         const totalRevenue = currentTable.requests.reduce((sum, r) => sum + r.total, 0);
         const sessionStartTime = currentTable.requests.length > 0 
           ? Math.min(...currentTable.requests.map(r => r.timestamp))
@@ -739,9 +770,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
 
-      // Delete ALL requests immediately (remove all orders from view when paid)
-      // We archive them first, so we can delete all regardless of status
-      // Use a more aggressive delete to ensure all requests are removed
+      // Delete ALL requests from table_requests immediately (remove from active view)
       const { data: deletedRequests, error: deleteError } = await supabase
         .from('table_requests')
         .delete()
@@ -755,7 +784,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         throw deleteError;
       }
       
-      console.log(`Deleted ${deletedRequests?.length || 0} requests for ${tableId}`);
+      console.log(`Deleted ${deletedRequests?.length || 0} requests from table_requests for ${tableId}`);
 
       // Clear cart as well (paid orders shouldn't have active cart)
       const { error: cartError } = await supabase
