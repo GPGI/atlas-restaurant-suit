@@ -2,6 +2,20 @@
 
 This app requires Supabase environment variables to be set in Vercel for the database to work properly.
 
+## ⚠️ IMPORTANT: Database Setup Required First
+
+**Before setting environment variables, you must create the database tables in your Supabase project.**
+
+### Step 1: Create Database Tables
+
+1. Go to your Supabase Dashboard: https://wicufyfrkaigjhirdgeu.supabase.co
+2. Navigate to **SQL Editor** → **New Query**
+3. Copy and paste the contents of `supabase_setup.sql` file
+4. Click **Run** to execute the SQL
+5. Wait 2-5 minutes for PostgREST to refresh its schema cache
+
+This will create all required tables and set up the necessary permissions.
+
 ## Required Environment Variables
 
 Add these environment variables in your Vercel project settings:
