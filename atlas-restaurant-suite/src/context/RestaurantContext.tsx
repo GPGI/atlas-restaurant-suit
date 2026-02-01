@@ -99,6 +99,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [tables, setTables] = useState<Record<string, TableSession>>(defaultTables);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultMenuItems);
   const [loading, setLoading] = useState(true);
+  const [paidTables, setPaidTables] = useState<Set<string>>(new Set()); // Track tables that were just marked as paid
 
   // Load menu items from Supabase
   useEffect(() => {
@@ -212,12 +213,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         // Get requests for this table - only show current session requests
         // Filter by session_started_at to hide previous session orders
+        // Also hide requests for tables that were just marked as paid
         const sessionStartedAt = table.session_started_at 
           ? new Date(table.session_started_at).getTime() 
           : 0;
         
         const requests: TableRequest[] = (requestsData || [])
           .filter(r => {
+            // Don't show requests for tables that were just marked as paid
+            if (paidTables.has(tableId)) {
+              return false;
+            }
+            
             // Only show requests from current session (created after session_started_at)
             if (r.table_id === tableId) {
               // If session_started_at exists, only show requests after that time
@@ -775,6 +782,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         throw unlockError;
       }
 
+      // Mark this table as paid to prevent showing old orders
+      setPaidTables(prev => new Set(prev).add(tableId));
+      
       // Double-check optimistic update to ensure requests stay cleared
       // This prevents real-time subscription from showing old orders
       setTables(prev => {
@@ -788,6 +798,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
         return updated;
       });
+
+      // Clear the paid flag after a short delay to allow deletion to complete
+      // This gives time for the database deletion to finish
+      setTimeout(() => {
+        setPaidTables(prev => {
+          const next = new Set(prev);
+          next.delete(tableId);
+          return next;
+        });
+      }, 2000); // 2 second delay to ensure deletion completes
 
       // Real-time subscription will sync, but optimistic update makes UI feel instant
     } catch (error) {
