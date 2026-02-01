@@ -295,7 +295,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       supabase.removeChannel(requestsSubscription);
       supabase.removeChannel(menuSubscription);
     };
-  }, []);
+  }, [loadTableSessions]);
 
   const getTableSession = useCallback((tableId: string, isVip = false): TableSession => {
     if (tables[tableId]) {
