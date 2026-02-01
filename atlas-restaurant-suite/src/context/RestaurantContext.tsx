@@ -214,6 +214,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Get requests for this table - only show current session requests
         // Filter by session_started_at to hide previous session orders
         // Also hide requests for tables that were just marked as paid
+        // IMPORTANT: Never show requests from completed_orders or table_history_archive
+        // Only fetch from table_requests and filter by session
         const sessionStartedAt = table.session_started_at 
           ? new Date(table.session_started_at).getTime() 
           : 0;
@@ -228,8 +230,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             // Only show requests from current session (created after session_started_at)
             if (r.table_id === tableId) {
               // If session_started_at exists, only show requests after that time
+              // This ensures archived/completed orders stay hidden
               if (sessionStartedAt > 0) {
-                return r.timestamp >= sessionStartedAt;
+                const requestTime = typeof r.timestamp === 'string' 
+                  ? new Date(r.timestamp).getTime() 
+                  : r.timestamp;
+                return requestTime >= sessionStartedAt;
               }
               // If no session_started_at, show all (backward compatibility)
               return true;
