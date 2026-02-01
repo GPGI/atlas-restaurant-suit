@@ -718,6 +718,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [loadTableSessions]);
 
   const resetTable = useCallback(async (tableId: string) => {
+    // Get current table data before clearing for archive
+    const currentTable = tables[tableId];
+    const sessionStartTime = currentTable?.requests.length > 0 
+      ? Math.min(...currentTable.requests.map(r => r.timestamp))
+      : Date.now();
+    const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 60000); // minutes
+
     // Optimistic update: clear everything immediately
     setTables(prev => {
       const updated = { ...prev };
@@ -735,6 +742,40 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     try {
+      // Archive the history before clearing
+      if (currentTable && (currentTable.cart.length > 0 || currentTable.requests.length > 0)) {
+        // Get cart items from database for archive
+        const { data: cartData } = await supabase
+          .from('cart_items')
+          .select('*')
+          .eq('table_id', tableId);
+
+        // Get requests from database for archive
+        const { data: requestsData } = await supabase
+          .from('table_requests')
+          .select('*')
+          .eq('table_id', tableId);
+
+        const totalRevenue = currentTable.requests.reduce((sum, r) => sum + r.total, 0);
+
+        // Archive the data
+        const { error: archiveError } = await supabase
+          .from('table_history_archive')
+          .insert({
+            id: `archive_${tableId}_${Date.now()}`,
+            table_id: tableId,
+            cart_items: cartData || [],
+            requests: requestsData || [],
+            total_revenue: totalRevenue,
+            session_duration_minutes: sessionDuration,
+          });
+
+        if (archiveError) {
+          console.error('Error archiving table history:', archiveError);
+          // Continue with reset even if archive fails
+        }
+      }
+
       // Clear cart
       const { error: cartError } = await supabase
         .from('cart_items')
@@ -779,7 +820,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.error('Error resetting table:', error);
       throw error; // Re-throw so UI can handle it
     }
-  }, [loadTableSessions]);
+  }, [loadTableSessions, tables]);
 
   const getCartTotal = useCallback((tableId: string): number => {
     const table = tables[tableId];
