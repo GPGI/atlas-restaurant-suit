@@ -146,100 +146,101 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   // Load table sessions from Supabase
-  useEffect(() => {
-    const loadTableSessions = async () => {
-      try {
-        // Load all tables
-        const { data: tablesData, error: tablesError } = await supabase
-          .from('restaurant_tables')
-          .select('*');
+  const loadTableSessions = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Load all tables
+      const { data: tablesData, error: tablesError } = await supabase
+        .from('restaurant_tables')
+        .select('*');
 
-        if (tablesError) {
-          console.error('Supabase error loading tables:', tablesError);
-          console.error('Error details:', {
-            message: tablesError.message,
-            details: tablesError.details,
-            hint: tablesError.hint,
-            code: tablesError.code,
-          });
-          // Fallback to default tables
-          setTables(defaultTables);
-          setLoading(false);
-          return;
-        }
-
-        // Load all cart items
-        const { data: cartData, error: cartError } = await supabase
-          .from('cart_items')
-          .select(`
-            *,
-            menu_items (id, name, price)
-          `);
-
-        if (cartError) {
-          console.error('Supabase error loading cart items:', cartError);
-          // Continue with empty cart if cart fails
-        }
-
-        // Load all table requests
-        const { data: requestsData, error: requestsError } = await supabase
-          .from('table_requests')
-          .select('*')
-          .order('timestamp', { ascending: false });
-
-        if (requestsError) {
-          console.error('Supabase error loading requests:', requestsError);
-          // Continue with empty requests if requests fail
-        }
-
-        // Build table sessions
-        const sessions: Record<string, TableSession> = {};
-        
-        (tablesData || []).forEach(table => {
-          const tableId = table.table_id;
-          
-          // Get cart items for this table
-          const cartItems: CartItem[] = (cartData || [])
-            .filter(ci => ci.table_id === tableId)
-            .map(ci => ({
-              id: ci.menu_item_id,
-              name: (ci.menu_items as any)?.name || '',
-              price: parseFloat((ci.menu_items as any)?.price || '0'),
-              quantity: ci.quantity,
-            }));
-
-          // Get requests for this table
-          const requests: TableRequest[] = (requestsData || [])
-            .filter(r => r.table_id === tableId)
-            .map(r => ({
-              id: r.id,
-              action: r.action,
-              details: r.details || '',
-              total: parseFloat(r.total || '0'),
-              status: r.status as 'pending' | 'completed',
-              timestamp: r.timestamp,
-              paymentMethod: r.payment_method as 'cash' | 'card' | undefined,
-            }));
-
-          sessions[tableId] = {
-            tableId,
-            isLocked: table.is_locked,
-            cart: cartItems,
-            requests,
-            isVip: table.is_vip,
-          };
+      if (tablesError) {
+        console.error('Supabase error loading tables:', tablesError);
+        console.error('Error details:', {
+          message: tablesError.message,
+          details: tablesError.details,
+          hint: tablesError.hint,
+          code: tablesError.code,
         });
-
-        setTables(sessions);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error loading table sessions:', error);
-        // Fallback to default tables on error
+        // Fallback to default tables
         setTables(defaultTables);
         setLoading(false);
+        return;
       }
-    };
 
+      // Load all cart items with menu item details
+      const { data: cartData, error: cartError } = await supabase
+        .from('cart_items')
+        .select(`
+          *,
+          menu_items (id, name, price)
+        `);
+
+      if (cartError) {
+        console.error('Supabase error loading cart items:', cartError);
+        // Continue with empty cart if cart fails
+      }
+
+      // Load all table requests
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('table_requests')
+        .select('*')
+        .order('timestamp', { ascending: false });
+
+      if (requestsError) {
+        console.error('Supabase error loading requests:', requestsError);
+        // Continue with empty requests if requests fail
+      }
+
+      // Build table sessions
+      const sessions: Record<string, TableSession> = {};
+      
+      (tablesData || []).forEach(table => {
+        const tableId = table.table_id;
+        
+        // Get cart items for this table
+        const cartItems: CartItem[] = (cartData || [])
+          .filter(ci => ci.table_id === tableId)
+          .map(ci => ({
+            id: ci.menu_item_id,
+            name: (ci.menu_items as any)?.name || '',
+            price: parseFloat((ci.menu_items as any)?.price || '0'),
+            quantity: ci.quantity,
+          }));
+
+        // Get requests for this table
+        const requests: TableRequest[] = (requestsData || [])
+          .filter(r => r.table_id === tableId)
+          .map(r => ({
+            id: r.id,
+            action: r.action,
+            details: r.details || '',
+            total: parseFloat(r.total || '0'),
+            status: r.status as 'pending' | 'completed',
+            timestamp: r.timestamp,
+            paymentMethod: r.payment_method as 'cash' | 'card' | undefined,
+          }));
+
+        sessions[tableId] = {
+          tableId,
+          isLocked: table.is_locked,
+          cart: cartItems,
+          requests,
+          isVip: table.is_vip,
+        };
+      });
+
+      setTables(sessions);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading table sessions:', error);
+      // Fallback to default tables on error
+      setTables(defaultTables);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     loadTableSessions();
 
     // Set up real-time subscriptions
@@ -248,6 +249,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'cart_items' },
         () => {
+          // Reload table sessions when cart changes
           loadTableSessions();
         }
       )

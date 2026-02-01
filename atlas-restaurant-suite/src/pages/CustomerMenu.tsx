@@ -85,11 +85,16 @@ const CustomerMenu: React.FC = () => {
         price: item.price,
         quantity: 1,
       });
+      // Show success feedback
+      toast({
+        title: '✅ Добавено',
+        description: `${item.name} е добавено в поръчката`,
+      });
     } catch (error) {
       console.error('Error adding item to cart:', error);
       toast({
         title: 'Грешка',
-        description: 'Неуспешно добавяне на артикул',
+        description: 'Неуспешно добавяне на артикул. Моля опитайте отново.',
         variant: 'destructive',
       });
     }
