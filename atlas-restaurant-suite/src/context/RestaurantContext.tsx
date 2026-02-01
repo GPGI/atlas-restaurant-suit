@@ -796,6 +796,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       callWaiter,
       requestBill,
       completeRequest,
+      markAsPaid,
       resetTable,
       getCartTotal,
       getCartItemCount,
