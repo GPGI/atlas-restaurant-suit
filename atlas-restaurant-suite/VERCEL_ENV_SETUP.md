@@ -28,8 +28,19 @@ Use the same values as above.
 
 ## Troubleshooting
 
-If you see 404 errors:
-- Verify the environment variables are set correctly
-- Check that the Supabase project is active
-- Ensure the tables exist in your Supabase database
-- Check browser console for detailed error messages
+### 404 Errors / PGRST205 Schema Cache Errors
+
+If you see errors like `"Could not find the table 'public.menu_items' in the schema cache"`:
+
+1. **Wait 2-5 minutes** - PostgREST automatically refreshes its schema cache, but there can be a delay after creating tables
+2. **Check Supabase Dashboard** - Go to your Supabase project → Settings → API → and verify tables are listed
+3. **Verify Environment Variables** - Ensure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set correctly in Vercel
+4. **Check Project URL** - Make sure you're using the correct Supabase project URL (should match where tables were created)
+5. **Manual Refresh** - In Supabase Dashboard, go to Database → and try making a small change to trigger schema reload
+
+### Other Common Issues
+
+- **404 errors**: Verify environment variables are set correctly
+- **RLS errors**: Check that Row Level Security policies allow public access
+- **Connection errors**: Verify the Supabase project is active and not paused
+- **Check browser console** for detailed error messages
