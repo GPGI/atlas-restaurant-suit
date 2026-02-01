@@ -310,23 +310,33 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const addToCart = useCallback(async (tableId: string, item: CartItem) => {
     try {
-      // Check if item already exists in cart
-      const { data: existingCartItem } = await supabase
+      // Check if item already exists in cart (use maybeSingle to avoid error when not found)
+      const { data: existingCartItem, error: selectError } = await supabase
         .from('cart_items')
         .select('*')
         .eq('table_id', tableId)
         .eq('menu_item_id', item.id)
-        .single();
+        .maybeSingle();
+
+      if (selectError && selectError.code !== 'PGRST116') {
+        // PGRST116 is "not found" which is expected, ignore it
+        throw selectError;
+      }
 
       if (existingCartItem) {
         // Update quantity
-        await supabase
+        const { error: updateError } = await supabase
           .from('cart_items')
           .update({ quantity: existingCartItem.quantity + 1 })
           .eq('id', existingCartItem.id);
+        
+        if (updateError) {
+          console.error('Error updating cart item:', updateError);
+          throw updateError;
+        }
       } else {
         // Insert new cart item
-        await supabase
+        const { error: insertError } = await supabase
           .from('cart_items')
           .insert({
             id: `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -334,49 +344,70 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             menu_item_id: item.id,
             quantity: 1,
           });
+        
+        if (insertError) {
+          console.error('Error inserting cart item:', insertError);
+          throw insertError;
+        }
       }
     } catch (error) {
       console.error('Error adding to cart:', error);
+      throw error; // Re-throw so UI can handle it
     }
   }, []);
 
   const removeFromCart = useCallback(async (tableId: string, itemId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('cart_items')
         .delete()
         .eq('table_id', tableId)
         .eq('menu_item_id', itemId);
+      
+      if (error) {
+        console.error('Error removing from cart:', error);
+        throw error;
+      }
     } catch (error) {
       console.error('Error removing from cart:', error);
+      throw error;
     }
   }, []);
 
   const updateCartQuantity = useCallback(async (tableId: string, itemId: string, quantity: number) => {
     try {
       if (quantity <= 0) {
-        await supabase
+        const { error } = await supabase
           .from('cart_items')
           .delete()
           .eq('table_id', tableId)
           .eq('menu_item_id', itemId);
+        
+        if (error) throw error;
       } else {
-        const { data: cartItem } = await supabase
+        const { data: cartItem, error: selectError } = await supabase
           .from('cart_items')
           .select('id')
           .eq('table_id', tableId)
           .eq('menu_item_id', itemId)
-          .single();
+          .maybeSingle();
+
+        if (selectError && selectError.code !== 'PGRST116') {
+          throw selectError;
+        }
 
         if (cartItem) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('cart_items')
             .update({ quantity })
             .eq('id', cartItem.id);
+          
+          if (updateError) throw updateError;
         }
       }
     } catch (error) {
       console.error('Error updating cart quantity:', error);
+      throw error;
     }
   }, []);
 
