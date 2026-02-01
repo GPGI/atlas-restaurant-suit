@@ -732,29 +732,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
 
-      // Mark all pending requests as completed
-      const { error: updateError } = await supabase
-        .from('table_requests')
-        .update({ status: 'completed' })
-        .eq('table_id', tableId)
-        .eq('status', 'pending');
-      
-      if (updateError) {
-        console.error('Error marking requests as paid:', updateError);
-        // Rollback on error
-        loadTableSessions();
-        throw updateError;
-      }
-
-      // Delete all completed requests (remove paid orders from view)
+      // Delete ALL requests immediately (remove all orders from view when paid)
+      // We archive them first, so we can delete all regardless of status
       const { error: deleteError } = await supabase
         .from('table_requests')
         .delete()
-        .eq('table_id', tableId)
-        .eq('status', 'completed');
+        .eq('table_id', tableId);
       
       if (deleteError) {
-        console.error('Error deleting paid requests:', deleteError);
+        console.error('Error deleting requests:', deleteError);
         // Rollback on error
         loadTableSessions();
         throw deleteError;
