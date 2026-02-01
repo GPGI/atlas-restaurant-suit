@@ -27,18 +27,35 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete }) => {
     >
       <div className="flex items-start justify-between gap-2 sm:gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-            <span className="font-semibold text-xs sm:text-sm truncate">{request.action}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1.5">
+            <span className="font-semibold text-xs sm:text-sm">{request.action}</span>
             <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0">
               <Clock className="h-3 w-3" />
               {time}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1 truncate">
-            {request.details}
-          </p>
+          {/* Order details - fully visible, no truncation */}
+          <div className="text-xs text-muted-foreground mt-1.5 space-y-0.5">
+            {request.details ? (
+              request.details.includes(',') ? (
+                // If details contain commas, split and show each item on new line
+                request.details.split(', ').map((item, index) => (
+                  <div key={index} className="leading-relaxed">
+                    {item.trim()}
+                  </div>
+                ))
+              ) : (
+                // Single line or no commas - show as is
+                <div className="leading-relaxed whitespace-normal break-words">
+                  {request.details}
+                </div>
+              )
+            ) : (
+              <div className="text-muted-foreground/60 italic">No details</div>
+            )}
+          </div>
           {request.total > 0 && (
-            <p className="text-xs sm:text-sm font-semibold text-primary mt-1">
+            <p className="text-xs sm:text-sm font-semibold text-primary mt-2">
               {request.total.toFixed(2)} лв
             </p>
           )}

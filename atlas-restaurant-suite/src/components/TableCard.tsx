@@ -86,7 +86,7 @@ const TableCard: React.FC<TableCardProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-3 sm:p-4 max-h-56 sm:max-h-64 overflow-y-auto scrollbar-premium">
+      <div className="p-3 sm:p-4 max-h-72 sm:max-h-80 overflow-y-auto scrollbar-premium">
         {session.requests.length === 0 ? (
           <p className="text-center text-muted-foreground text-xs sm:text-sm py-4 sm:py-6">
             No activity
