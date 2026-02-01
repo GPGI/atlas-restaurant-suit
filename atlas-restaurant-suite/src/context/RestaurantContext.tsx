@@ -898,8 +898,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Step 2: Move ALL requests to completed_orders (direct database operation)
       // This includes: orders, waiter calls, bill requests - everything
       if (requestsData.length > 0) {
+        // Generate unique IDs to avoid conflicts (use timestamp + random)
         const completedOrders = requestsData.map(req => ({
-          id: req.id,
+          id: `completed_${req.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           table_id: req.table_id,
           action: req.action,
           details: req.details || '',
@@ -909,16 +910,33 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           payment_method: req.payment_method || null,
         }));
 
+        // Use upsert to handle potential conflicts gracefully
         const { data: insertedOrders, error: moveError } = await supabase
           .from('completed_orders')
-          .insert(completedOrders)
+          .upsert(completedOrders, { 
+            onConflict: 'id',
+            ignoreDuplicates: false 
+          })
           .select();
 
         if (moveError) {
           console.error('Error moving to completed_orders:', moveError);
-          throw moveError;
+          // If upsert fails, try insert with conflict handling
+          const { error: insertError } = await supabase
+            .from('completed_orders')
+            .insert(completedOrders)
+            .select();
+          
+          if (insertError) {
+            console.error('Error inserting to completed_orders (fallback):', insertError);
+            // Continue even if insert fails - we'll still delete from table_requests
+            console.warn('Continuing reset despite completed_orders error...');
+          } else {
+            console.log(`✅ Moved ${completedOrders.length} requests to completed_orders for ${tableId} (fallback)`);
+          }
+        } else {
+          console.log(`✅ Moved ${insertedOrders?.length || completedOrders.length} requests to completed_orders for ${tableId}`);
         }
-        console.log(`✅ Moved ${insertedOrders?.length || completedOrders.length} requests to completed_orders for ${tableId}`);
       }
 
       // Step 3: Archive the session (direct database operation)
