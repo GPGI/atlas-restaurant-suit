@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { debounce, retryWithBackoff } from '@/utils/optimization';
 
@@ -1116,28 +1116,51 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, []);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    tables,
+    menuItems,
+    loading,
+    getTableSession,
+    addToCart,
+    removeFromCart,
+    updateCartQuantity,
+    clearCart,
+    submitOrder,
+    callWaiter,
+    requestBill,
+    completeRequest,
+    markAsPaid,
+    resetTable,
+    getCartTotal,
+    getCartItemCount,
+    addMenuItem,
+    updateMenuItem,
+    deleteMenuItem,
+  }), [
+    tables,
+    menuItems,
+    loading,
+    getTableSession,
+    addToCart,
+    removeFromCart,
+    updateCartQuantity,
+    clearCart,
+    submitOrder,
+    callWaiter,
+    requestBill,
+    completeRequest,
+    markAsPaid,
+    resetTable,
+    getCartTotal,
+    getCartItemCount,
+    addMenuItem,
+    updateMenuItem,
+    deleteMenuItem,
+  ]);
+
   return (
-    <RestaurantContext.Provider value={{
-      tables,
-      menuItems,
-      loading,
-      getTableSession,
-      addToCart,
-      removeFromCart,
-      updateCartQuantity,
-      clearCart,
-      submitOrder,
-      callWaiter,
-      requestBill,
-      completeRequest,
-      markAsPaid,
-      resetTable,
-      getCartTotal,
-      getCartItemCount,
-      addMenuItem,
-      updateMenuItem,
-      deleteMenuItem,
-    }}>
+    <RestaurantContext.Provider value={contextValue}>
       {children}
     </RestaurantContext.Provider>
   );
