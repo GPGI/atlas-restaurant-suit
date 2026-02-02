@@ -49,28 +49,31 @@ export default defineConfig(({ mode }) => ({
             'lucide-react',        // React icon library
             'next-themes',         // React theme library
             'vaul',                // React drawer library (uses React)
+            'cmdk',                // React command menu library (uses React hooks)
+            'input-otp',           // React OTP input library (uses React)
+            '@hookform/resolvers', // React Hook Form resolvers
           ];
           
           if (reactDependentLibs.some(lib => id.includes(lib))) {
             return undefined; // Include in main bundle
           }
           
-          // Our React-dependent source code
-          if (id.includes('src/context/') || 
-              id.includes('src/components/ui/') ||
-              id.includes('src/App.tsx') ||
-              id.includes('src/main.tsx')) {
+          // ALL source code must be in main bundle (it all uses React)
+          if (id.includes('src/')) {
             return undefined; // Include in main bundle
           }
           
           // Admin pages - only loaded when staff accesses admin
-          if (id.includes('src/pages/StaffDashboard') || id.includes('src/pages/MenuEditor')) {
-            return 'admin';
-          }
+          // But wait, they're in src/, so they're already in main bundle
+          // Actually, let's keep lazy loading for admin pages
+          // But they'll still need React, so they should import from main bundle
+          // Actually, since we're lazy loading, they can be separate chunks
+          // But they'll still have React as a dependency from the main bundle
           
-          // Drag and drop library - only needed in MenuEditor
+          // Drag and drop library - only needed in MenuEditor (admin page)
+          // But it might use React hooks, so let's keep it in main bundle to be safe
           if (id.includes('@dnd-kit')) {
-            return 'dnd';
+            return undefined; // Include in main bundle to be safe
           }
           
           // Supabase - large library, doesn't depend on React
@@ -78,13 +81,26 @@ export default defineConfig(({ mode }) => ({
             return 'supabase';
           }
           
-          // Other vendor libraries (but NOT React or React-dependent code)
-          // Only include truly non-React libraries in vendor chunk
+          // Only truly standalone, non-React utilities in vendor chunk
+          // These are pure JavaScript libraries with no React dependencies
+          const safeVendorLibs = [
+            'date-fns',              // Date utility library (no React)
+            'zod',                   // Schema validation (no React)
+            'clsx',                  // Class name utility (no React)
+            'tailwind-merge',        // Tailwind class merger (no React)
+            'class-variance-authority', // Class variant utility (no React)
+            'tailwindcss-animate',   // Tailwind animation (no React)
+          ];
+          
           if (id.includes('node_modules') && 
-              !id.includes('react') && 
-              !id.includes('react-dom') &&
-              !reactDependentLibs.some(lib => id.includes(lib))) {
+              safeVendorLibs.some(lib => id.includes(lib))) {
             return 'vendor';
+          }
+          
+          // Everything else from node_modules that we're not sure about
+          // should go in main bundle to be safe
+          if (id.includes('node_modules')) {
+            return undefined; // Include in main bundle to be safe
           }
         }
       }
