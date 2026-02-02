@@ -35,7 +35,7 @@ const CartSummary: React.FC<CartSummaryProps> = ({
               {itemCount} {itemCount === 1 ? 'item' : 'items'}
             </p>
             <p className="font-display text-lg font-semibold text-foreground">
-              {total.toFixed(2)} лв
+              {total.toFixed(2)} EUR
             </p>
           </div>
         </div>
@@ -60,7 +60,7 @@ const CartSummary: React.FC<CartSummaryProps> = ({
           {itemCount} {itemCount === 1 ? 'артикул' : 'артикула'}
           </p>
         <p className="font-semibold text-foreground text-sm sm:text-base truncate">
-            {total.toFixed(2)} лв
+            {total.toFixed(2)} EUR
           </p>
         </div>
       {/* Badge indicator */}

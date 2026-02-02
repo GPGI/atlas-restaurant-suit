@@ -55,7 +55,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
               <p className="text-sm text-muted-foreground mt-1">{description}</p>
             )}
             <p className="text-primary font-semibold mt-2">
-              {price.toFixed(2)} лв
+              {price.toFixed(2)} EUR
             </p>
           </div>
           
@@ -102,23 +102,29 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
 
   return (
     <div className="group relative py-4 sm:py-5 border-b border-border/50 last:border-0 hover:border-primary/20 transition-colors duration-300 animate-fade-in">
-      <div className="flex items-center justify-between gap-3 sm:gap-4 md:gap-6">
-        {/* Item Name and Price - Classic Restaurant Style */}
-        <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3">
-          <h3 className="font-display text-base sm:text-lg font-medium text-foreground tracking-tight flex-shrink-0 truncate">
-            {name}
-          </h3>
-          <div className="hidden sm:flex flex-1 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-          <div className="flex items-baseline gap-1 sm:gap-1.5 flex-shrink-0">
-            <span className="text-base sm:text-lg font-semibold text-foreground">
-              {price.toFixed(2)}
-            </span>
-            <span className="text-xs text-muted-foreground font-light">лв</span>
+      <div className="flex items-start justify-between gap-3 sm:gap-4 md:gap-6">
+        {/* Item Name, Description and Price */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2 sm:gap-3 mb-1">
+            <h3 className="font-display text-base sm:text-lg font-medium text-foreground tracking-tight flex-1">
+              {name}
+            </h3>
+            <div className="flex items-baseline gap-1 sm:gap-1.5 flex-shrink-0 ml-auto">
+              <span className="text-base sm:text-lg font-semibold text-foreground">
+                {price.toFixed(2)}
+              </span>
+              <span className="text-xs text-muted-foreground font-light">EUR</span>
+            </div>
           </div>
+          {description && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {description}
+            </p>
+          )}
         </div>
         
         {/* Quantity Controls - Touch Optimized */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 pt-1">
           {quantity > 0 && (
             <>
               <Button

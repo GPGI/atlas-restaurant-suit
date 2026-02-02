@@ -85,13 +85,32 @@ const CustomerMenu: React.FC = () => {
   // Group menu items by category - memoized with proper dependency
   const groupedItems = useMemo(() => {
     return menuItems.reduce((acc, item) => {
-      if (!acc[item.cat]) {
-        acc[item.cat] = [];
+      // Handle empty or undefined categories
+      const category = item.cat && item.cat.trim() 
+        ? item.cat.trim() 
+        : '📦 Други';
+      
+      if (!acc[category]) {
+        acc[category] = [];
       }
-      acc[item.cat].push(item);
+      acc[category].push(item);
       return acc;
     }, {} as Record<string, typeof menuItems>);
   }, [menuItems]);
+
+  // Filter out empty categories and sort them
+  const sortedCategories = useMemo(() => {
+    return Object.entries(groupedItems)
+      .filter(([_, items]) => items.length > 0)
+      .sort(([a], [b]) => {
+        // Sort categories: emoji categories first, then alphabetically
+        const aHasEmoji = /^[\p{Emoji}]/u.test(a);
+        const bHasEmoji = /^[\p{Emoji}]/u.test(b);
+        if (aHasEmoji && !bHasEmoji) return -1;
+        if (!aHasEmoji && bHasEmoji) return 1;
+        return a.localeCompare(b);
+      });
+  }, [groupedItems]);
 
   const getItemQuantity = useCallback((itemId: string) => {
     const cartItem = session.cart.find(i => i.id === itemId);
@@ -331,7 +350,7 @@ const CustomerMenu: React.FC = () => {
             Благодарим ви, че посетихте ATLAS HOUSE!
           </p>
           <p className="text-primary font-semibold mt-4 text-lg">
-            Обща сметка: {totalBill.toFixed(2)} лв
+            Обща сметка: {totalBill.toFixed(2)} EUR
           </p>
         </div>
       </div>
@@ -378,34 +397,47 @@ const CustomerMenu: React.FC = () => {
       {/* Menu */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
         <div className="space-y-8 sm:space-y-12 md:space-y-16 stagger-children">
-          {Object.entries(groupedItems).map(([category, items]) => (
-            <section key={category} className="animate-fade-in">
-              {/* Elegant Category Header */}
-              <div className="mb-4 sm:mb-6 md:mb-8">
-                <h2 className="font-display text-xl sm:text-2xl font-light text-foreground tracking-wide mb-2">
-                {category}
-              </h2>
-                <div className="h-px w-12 sm:w-16 bg-primary/40" />
-              </div>
-              
-              {/* Menu Items - Classic Restaurant Style */}
-              <div className="bg-card/30 backdrop-blur-sm rounded-lg border border-border/30 p-4 sm:p-6 space-y-0">
-                {items.map((item) => (
-                  <MenuItemCard
-                    key={item.id}
-                    id={item.id}
-                    name={item.name}
-                    price={item.price}
-                    quantity={getItemQuantity(item.id)}
-                    onAdd={() => handleAddItem(item)}
-                    onRemove={() => handleRemoveItem(item.id)}
-                    disabled={session.isLocked}
-                    isLoading={loadingItems.has(item.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          {sortedCategories.map(([category, items]) => {
+            // Extract emoji from category name
+            const categoryEmoji = category.match(/^[\p{Emoji}]/u)?.[0] || '🍽️';
+            const categoryName = category.replace(/^[\p{Emoji}]\s*/, '') || category;
+            
+            return (
+              <section key={category} className="animate-fade-in">
+                {/* Enhanced Category Header */}
+                <div className="mb-4 sm:mb-6 md:mb-8">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl sm:text-3xl">{categoryEmoji}</span>
+                    <h2 className="font-display text-xl sm:text-2xl font-light text-foreground tracking-wide">
+                      {categoryName}
+                    </h2>
+                    <span className="text-sm text-muted-foreground font-light">
+                      ({items.length})
+                    </span>
+                  </div>
+                  <div className="h-px w-12 sm:w-16 bg-gradient-to-r from-primary/60 via-primary/40 to-transparent" />
+                </div>
+                
+                {/* Menu Items - Classic Restaurant Style */}
+                <div className="bg-card/30 backdrop-blur-sm rounded-lg border border-border/30 p-4 sm:p-6 space-y-0">
+                  {items.map((item) => (
+                    <MenuItemCard
+                      key={item.id}
+                      id={item.id}
+                      name={item.name}
+                      price={item.price}
+                      description={item.desc || item.description}
+                      quantity={getItemQuantity(item.id)}
+                      onAdd={() => handleAddItem(item)}
+                      onRemove={() => handleRemoveItem(item.id)}
+                      disabled={session.isLocked}
+                      isLoading={loadingItems.has(item.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       </main>
 

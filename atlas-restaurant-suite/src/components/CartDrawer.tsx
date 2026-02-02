@@ -119,7 +119,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                       {item.name}
                     </h3>
                     <p className="text-sm sm:text-base font-bold text-primary">
-                      {item.price.toFixed(2)} лв
+                      {item.price.toFixed(2)} EUR
                     </p>
                   </div>
 
@@ -174,7 +174,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Подобщо:</span>
                   <span className="text-sm font-semibold text-foreground">
-                    {(item.price * item.quantity).toFixed(2)} лв
+                    {(item.price * item.quantity).toFixed(2)} EUR
                   </span>
                 </div>
               </div>
@@ -190,7 +190,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
                 Общо:
               </span>
               <span className="font-display text-2xl sm:text-3xl font-bold text-primary">
-                {total.toFixed(2)} лв
+                {total.toFixed(2)} EUR
               </span>
             </div>
           </div>

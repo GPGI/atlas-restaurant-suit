@@ -46,7 +46,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               {variant === 'premium' ? 'Total Amount' : 'Обща сума'}
             </p>
             <p className={`font-bold text-primary ${variant === 'premium' ? 'font-display text-4xl' : 'text-3xl'}`}>
-              {total.toFixed(2)} лв
+              {total.toFixed(2)} EUR
             </p>
           </div>
           

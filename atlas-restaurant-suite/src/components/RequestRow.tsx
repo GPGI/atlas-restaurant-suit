@@ -65,7 +65,7 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete, isCompleti
           </div>
           {request.total > 0 && (
             <p className="text-base sm:text-lg font-bold text-primary mt-2.5">
-              {request.total.toFixed(2)} лв
+              {request.total.toFixed(2)} EUR
             </p>
           )}
         </div>

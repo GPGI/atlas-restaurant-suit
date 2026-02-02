@@ -103,7 +103,7 @@ const DraggableMenuItem: React.FC<{
             <p className="text-sm text-muted-foreground mt-1">{item.desc}</p>
           )}
           <p className="text-primary font-semibold mt-1">
-            {item.price.toFixed(2)} лв
+            {item.price.toFixed(2)} EUR
           </p>
         </div>
       </div>
@@ -1041,7 +1041,7 @@ const MenuEditor: React.FC = () => {
                       </p>
                     </div>
                     <div>
-                      <Label htmlFor="price">Price (лв)</Label>
+                      <Label htmlFor="price">Price (EUR)</Label>
                       <Input
                         id="price"
                         type="number"
@@ -1143,7 +1143,7 @@ const MenuEditor: React.FC = () => {
                       <p className="text-sm text-muted-foreground mt-1">{draggedItem.desc}</p>
                     )}
                     <p className="text-primary font-semibold mt-1">
-                      {draggedItem.price.toFixed(2)} лв
+                      {draggedItem.price.toFixed(2)} EUR
                     </p>
                   </div>
                 </div>

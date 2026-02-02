@@ -175,7 +175,7 @@ const StaffDashboard: React.FC = () => {
                   Revenue
                 </p>
                 <p className="font-display text-xl sm:text-2xl font-bold text-primary truncate">
-                  {totalRevenue.toFixed(2)} лв
+                  {totalRevenue.toFixed(2)} EUR
                 </p>
               </div>
             </div>

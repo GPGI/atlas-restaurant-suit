@@ -101,7 +101,7 @@ const TableCard: React.FC<TableCardProps> = ({
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs sm:text-sm text-muted-foreground">Running Total</span>
             <span className="font-display text-lg sm:text-xl font-bold text-primary truncate">
-              {totalBill.toFixed(2)} лв
+              {totalBill.toFixed(2)} EUR
             </span>
           </div>
         </div>

@@ -171,7 +171,7 @@ const PremiumMenu: React.FC = () => {
           <div className="mt-6 pt-6 border-t border-border">
             <p className="text-sm text-muted-foreground">Total</p>
             <p className="font-display text-4xl font-bold text-gold mt-1">
-              {totalBill.toFixed(2)} лв
+              {totalBill.toFixed(2)} EUR
             </p>
           </div>
         </div>
@@ -278,7 +278,7 @@ const PremiumMenu: React.FC = () => {
                     {cartItemCount} {cartItemCount === 1 ? 'item' : 'items'}
                   </p>
                   <p className="font-display text-xl font-bold text-foreground">
-                    {cartTotal.toFixed(2)} лв
+                    {cartTotal.toFixed(2)} EUR
                   </p>
                 </div>
               </div>
