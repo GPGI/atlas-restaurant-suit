@@ -23,17 +23,24 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // CRITICAL: React and React DOM MUST be in the main bundle or load first
-          // Don't split React - it causes loading order issues
-          // Keep React in main bundle to ensure it's always available
+          // CRITICAL: React and React DOM MUST be in the main bundle
+          // Keep React in main bundle to ensure it's always available first
           if (id.includes('node_modules/react/') || 
               id.includes('node_modules/react-dom/') ||
               id.includes('node_modules/react/jsx-runtime')) {
-            // Return undefined to include in main bundle
-            return undefined;
+            return undefined; // Include in main bundle
           }
           
-          // React Router - depends on React
+          // CRITICAL: Any code that uses React.createContext or React hooks
+          // must also be in main bundle or load after React
+          // This includes our context files and React-dependent UI components
+          if (id.includes('src/context/') || 
+              id.includes('src/components/ui/') ||
+              id.includes('@radix-ui')) {
+            return undefined; // Include in main bundle to ensure React is available
+          }
+          
+          // React Router - depends on React, but can be lazy loaded
           if (id.includes('react-router')) {
             return 'vendor-router';
           }
@@ -48,21 +55,17 @@ export default defineConfig(({ mode }) => ({
             return 'dnd';
           }
           
-          // UI libraries - shared across app (depends on React)
-          if (id.includes('@radix-ui')) {
-            return 'ui';
-          }
-          
-          // Supabase - large library
+          // Supabase - large library, doesn't depend on React
           if (id.includes('@supabase/supabase-js')) {
             return 'supabase';
           }
           
-          // Other vendor libraries (but NOT React)
+          // Other vendor libraries (but NOT React or React-dependent code)
           if (id.includes('node_modules') && 
               !id.includes('react') && 
               !id.includes('react-dom') &&
-              !id.includes('react-router')) {
+              !id.includes('react-router') &&
+              !id.includes('@radix-ui')) {
             return 'vendor';
           }
         }
