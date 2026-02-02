@@ -45,7 +45,7 @@ export interface TableRequest {
   action: string;
   details: string;
   total: number;
-  status: 'pending' | 'completed';
+  status: 'pending' | 'confirmed' | 'completed';
   timestamp: number;
   paymentMethod?: 'cash' | 'card';
 }
@@ -95,11 +95,22 @@ for (let i = 1; i <= 10; i++) {
   };
 }
 
+// Helper function to map database item to MenuItem
+const mapMenuItem = (item: any): MenuItem => ({
+  id: item.id,
+  cat: item.cat,
+  name: item.name,
+  price: parseFloat(item.price),
+  desc: item.description || undefined,
+  description: item.description || undefined,
+});
+
 export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tables, setTables] = useState<Record<string, TableSession>>(defaultTables);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultMenuItems);
   const [loading, setLoading] = useState(true);
   const [paidTables, setPaidTables] = useState<Set<string>>(new Set()); // Track tables that were just marked as paid
+  const [lastCleanup, setLastCleanup] = useState<number>(0); // Track last cleanup time
 
   // Load menu items from Supabase
   useEffect(() => {
@@ -125,14 +136,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (data && data.length > 0) {
           // Map database fields to interface
-          const mappedItems: MenuItem[] = data.map(item => ({
-            id: item.id,
-            cat: item.cat,
-            name: item.name,
-            price: parseFloat(item.price),
-            desc: item.description || undefined,
-            description: item.description || undefined,
-          }));
+          const mappedItems: MenuItem[] = data.map(mapMenuItem);
           setMenuItems(mappedItems);
         } else {
           // If no data, use defaults
@@ -153,25 +157,42 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       setLoading(true);
       
-      // Cleanup: Delete ALL completed requests from table_requests immediately
-      // This ensures completed requests don't accumulate in the active table
-      // Use delete with .neq() to delete all completed requests in one operation
-      const { data: deletedCompleted, error: cleanupError } = await supabase
-        .from('table_requests')
-        .delete()
-        .eq('status', 'completed')
-        .select('id');
+      // OPTIMIZATION: Only cleanup completed requests periodically (every 5 minutes)
+      // This reduces unnecessary database operations
+      const now = Date.now();
+      const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+      const shouldCleanup = now - lastCleanup > CLEANUP_INTERVAL;
       
-      if (cleanupError) {
-        console.warn('Error cleaning up completed requests:', cleanupError);
-      } else if (deletedCompleted && deletedCompleted.length > 0) {
-        console.log(`🧹 Cleaned up ${deletedCompleted.length} completed request(s) from table_requests`);
+      if (shouldCleanup) {
+        // Cleanup: Delete ALL completed requests from table_requests
+        const { data: deletedCompleted, error: cleanupError } = await supabase
+          .from('table_requests')
+          .delete()
+          .eq('status', 'completed')
+          .select('id');
+        
+        if (cleanupError) {
+          console.warn('Error cleaning up completed requests:', cleanupError);
+        } else if (deletedCompleted && deletedCompleted.length > 0) {
+          console.log(`🧹 Cleaned up ${deletedCompleted.length} completed request(s) from table_requests`);
+        }
+        setLastCleanup(now);
       }
       
-      // Load all tables
-      const { data: tablesData, error: tablesError } = await supabase
-        .from('restaurant_tables')
-        .select('*');
+      // OPTIMIZATION: Load all data in parallel using Promise.all
+      // This reduces total loading time significantly
+      const [tablesResult, cartResult, requestsResult] = await Promise.all([
+        supabase.from('restaurant_tables').select('*'),
+        supabase.from('cart_items').select('*, menu_items(id, name, price)'),
+        supabase.from('table_requests')
+          .select('*')
+          .neq('status', 'completed') // Exclude completed requests at database level
+          .order('timestamp', { ascending: false })
+      ]);
+
+      const { data: tablesData, error: tablesError } = tablesResult;
+      const { data: cartData, error: cartError } = cartResult;
+      const { data: requestsData, error: requestsError } = requestsResult;
 
       if (tablesError) {
         console.error('Supabase error loading tables:', tablesError);
@@ -187,25 +208,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         return;
       }
 
-      // Load all cart items with menu item details
-      const { data: cartData, error: cartError } = await supabase
-        .from('cart_items')
-        .select(`
-          *,
-          menu_items (id, name, price)
-        `);
-
       if (cartError) {
         console.error('Supabase error loading cart items:', cartError);
         // Continue with empty cart if cart fails
       }
 
-      // Load all table requests - EXCLUDE completed requests at query level
-      const { data: requestsData, error: requestsError } = await supabase
-        .from('table_requests')
-        .select('*')
-        .neq('status', 'completed') // Exclude completed requests at database level
-        .order('timestamp', { ascending: false });
+      if (requestsError) {
+        console.error('Supabase error loading requests:', requestsError);
+        // Continue with empty requests if requests fail
+      }
 
       if (requestsError) {
         console.error('Supabase error loading requests:', requestsError);
@@ -242,12 +253,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             // Don't show requests for tables that were just marked as paid
             if (paidTables.has(tableId)) {
               return false;
-            }
+      }
             
-            // SAFEGUARD: Never show requests with status='completed' - they should be in completed_orders
-            // This prevents showing completed requests that somehow weren't deleted
+            // Show pending and confirmed requests (confirmed = being prepared)
+            // Only hide completed requests (these should be in completed_orders)
             if (r.status === 'completed') {
               console.warn(`⚠️ Found completed request ${r.id} still in table_requests - should be in completed_orders`);
+              return false;
+            }
+            
+            // Show both 'pending' and 'confirmed' status requests
+            // 'confirmed' means the order is being prepared
+            if (r.status !== 'pending' && r.status !== 'confirmed') {
               return false;
             }
             
@@ -293,15 +310,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setTables(defaultTables);
       setLoading(false);
     }
-  }, []);
+  }, [lastCleanup]);
 
   useEffect(() => {
     loadTableSessions();
 
-    // Debounced reload to prevent excessive API calls
+    // OPTIMIZATION: Debounced reload to prevent excessive API calls
+    // Reduced from 500ms to 300ms for faster updates while still preventing spam
     const debouncedReload = debounce(() => {
       loadTableSessions();
-    }, 500);
+    }, 300);
 
     // Set up real-time subscriptions with debouncing
     const cartSubscription = supabase
@@ -332,6 +350,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       )
       .subscribe();
 
+    // OPTIMIZATION: Selective real-time updates - only update changed items
+    // This avoids full reloads and improves performance significantly
     const menuSubscription = supabase
       .channel('menu_changes')
       .on('postgres_changes',
@@ -340,27 +360,36 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           schema: 'public', 
           table: 'menu_items' 
         },
-        async (payload) => {
+        (payload) => {
           console.log('Real-time menu_items change:', payload.eventType, payload);
-          // Immediately reload menu items without debounce for instant updates
-          const { data, error } = await supabase
-            .from('menu_items')
-            .select('*')
-            .order('cat', { ascending: true });
-
-          if (!error && data) {
-            const mappedItems: MenuItem[] = data.map(item => ({
-              id: item.id,
-              cat: item.cat,
-              name: item.name,
-              price: parseFloat(item.price),
-              desc: item.description || undefined,
-              description: item.description || undefined,
-            }));
-            setMenuItems(mappedItems);
-            console.log(`✅ Menu updated in real-time: ${mappedItems.length} items`);
-          } else if (error) {
-            console.error('Error reloading menu items in real-time:', error);
+          
+          if (payload.eventType === 'INSERT' && payload.new) {
+            // Add new item without reloading all items
+            const newItem = mapMenuItem(payload.new);
+            setMenuItems(prev => {
+              // Check if item already exists (avoid duplicates)
+              if (prev.find(item => item.id === newItem.id)) {
+                return prev;
+              }
+              return [...prev, newItem].sort((a, b) => {
+                const catA = a.cat || '';
+                const catB = b.cat || '';
+                return catA.localeCompare(catB);
+              });
+            });
+            console.log(`✅ Added menu item in real-time: ${newItem.name}`);
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            // Update existing item without reloading all items
+            const updatedItem = mapMenuItem(payload.new);
+            setMenuItems(prev => prev.map(item => 
+              item.id === updatedItem.id ? updatedItem : item
+            ));
+            console.log(`✅ Updated menu item in real-time: ${updatedItem.name}`);
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            // Remove deleted item without reloading all items
+            const deletedId = payload.old.id;
+            setMenuItems(prev => prev.filter(item => item.id !== deletedId));
+            console.log(`✅ Deleted menu item in real-time: ${deletedId}`);
           }
         }
       )
@@ -500,7 +529,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       } else {
         throw error; // Re-throw so UI can handle it
-      }
+          }
     }
   }, [loadTableSessions]);
 
@@ -730,93 +759,40 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const completeRequest = useCallback(async (tableId: string, requestId: string) => {
-    // Optimistic update: remove request from local state immediately
+    // Optimistic update: update request status to 'confirmed' in local state
     setTables(prev => {
       const updated = { ...prev };
       if (!updated[tableId]) return updated;
       
       updated[tableId] = {
         ...updated[tableId],
-        requests: updated[tableId].requests.filter(req => req.id !== requestId),
+        requests: updated[tableId].requests.map(req =>
+          req.id === requestId ? { ...req, status: 'confirmed' as const } : req
+        ),
       };
       
       return updated;
     });
 
     try {
-      // Step 1: Fetch the request directly from database to ensure we have complete data
-      const { data: requestData, error: fetchError } = await supabase
+      // Update request status to 'confirmed' in database (DO NOT DELETE)
+      // The request stays in table_requests until the table is marked as paid
+      const { error: updateError } = await supabase
         .from('table_requests')
-        .select('*')
+        .update({ status: 'confirmed' })
         .eq('id', requestId)
-        .eq('table_id', tableId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching request to complete:', fetchError);
-        // Rollback optimistic update
-        loadTableSessions();
-        throw fetchError;
-      }
-
-      if (!requestData) {
-        console.warn(`Request ${requestId} not found in database`);
-        // Rollback optimistic update
-        loadTableSessions();
-        return;
-      }
-
-      // Step 2: Move request to completed_orders table
-      const { error: moveError } = await supabase
-        .from('completed_orders')
-        .insert({
-          id: `completed_${requestId}_${Date.now()}`,
-          table_id: tableId,
-          action: requestData.action,
-          details: requestData.details || '',
-          total: parseFloat(requestData.total || '0'),
-          status: 'completed',
-          timestamp: requestData.timestamp,
-          payment_method: requestData.payment_method || null,
-        });
-
-      if (moveError) {
-        console.error('Error moving to completed_orders:', moveError);
-        // Continue with deletion even if move fails (non-critical)
-        // But log it for debugging
-      } else {
-        console.log(`✅ Moved request ${requestId} to completed_orders`);
-      }
-
-      // Step 3: Delete request from table_requests (remove from active view)
-      const { data: deletedData, error: deleteError } = await supabase
-        .from('table_requests')
-        .delete()
-        .eq('id', requestId)
-        .eq('table_id', tableId)
-        .select();
+        .eq('table_id', tableId);
       
-      if (deleteError) {
-        console.error('Error deleting request:', deleteError);
-        // Rollback on error
+      if (updateError) {
+        console.error('Error confirming request:', updateError);
+        // Rollback optimistic update on error
         loadTableSessions();
-        throw deleteError;
+        throw updateError;
       }
 
-      // Log deletion result
-      if (deletedData && deletedData.length > 0) {
-        console.log(`✅ Deleted request ${requestId} from table_requests`);
-      } else {
-        // Request might have already been deleted by another client
-        // This is fine - just means it was already gone
-        console.log(`ℹ️ Request ${requestId} was not found (may have already been deleted)`);
-      }
-
-      // Real-time subscription will automatically update the UI when the delete propagates
-      // No need for manual verification or force reload - trust the database operation
-      // The optimistic update already removed it from the UI, and real-time will keep it in sync
+      console.log(`✅ Confirmed request ${requestId} - status updated to 'confirmed' (stays in table_requests until paid)`);
     } catch (error) {
-      console.error('Error completing request:', error);
+      console.error('Error confirming request:', error);
       // Rollback optimistic update on error
       loadTableSessions();
       throw error;
@@ -1223,6 +1199,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return table.cart.reduce((sum, i) => sum + i.quantity, 0);
   }, [tables]);
 
+  // OPTIMIZATION: Memoize grouped menu items to avoid recalculating on every render
+  const groupedMenuItems = useMemo(() => {
+    return menuItems.reduce((acc, item) => {
+      const category = item.cat && item.cat.trim() ? item.cat.trim() : '📦 Unassigned';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {} as Record<string, MenuItem[]>);
+  }, [menuItems]);
+
   // Menu management functions
   const addMenuItem = useCallback(async (item: Omit<MenuItem, 'id'>) => {
     try {
@@ -1273,22 +1261,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
-    tables,
+      tables,
     menuItems,
     loading,
-    getTableSession,
-    addToCart,
-    removeFromCart,
-    updateCartQuantity,
-    clearCart,
-    submitOrder,
-    callWaiter,
-    requestBill,
-    completeRequest,
+      getTableSession,
+      addToCart,
+      removeFromCart,
+      updateCartQuantity,
+      clearCart,
+      submitOrder,
+      callWaiter,
+      requestBill,
+      completeRequest,
     markAsPaid,
-    resetTable,
-    getCartTotal,
-    getCartItemCount,
+      resetTable,
+      getCartTotal,
+      getCartItemCount,
     addMenuItem,
     updateMenuItem,
     deleteMenuItem,

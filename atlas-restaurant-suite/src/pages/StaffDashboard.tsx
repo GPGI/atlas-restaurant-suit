@@ -77,14 +77,14 @@ const StaffDashboard: React.FC = () => {
     try {
       await completeRequest(tableId, requestId);
       toast({
-        title: '✅ Заявката е завършена',
-        description: 'Заявката е маркирана като завършена и преместена в архива',
+        title: '✅ Поръчката е потвърдена',
+        description: 'Поръчката е потвърдена и се приготвя',
       });
     } catch (error) {
       console.error('Error completing request:', error);
       toast({
         title: 'Грешка',
-        description: 'Неуспешно завършване на заявка',
+        description: 'Неуспешно потвърждаване на поръчка',
         variant: 'destructive',
       });
     } finally {

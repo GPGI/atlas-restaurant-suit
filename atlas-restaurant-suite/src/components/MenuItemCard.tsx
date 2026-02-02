@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Minus, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -162,4 +162,5 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   );
 };
 
-export default MenuItemCard;
+// OPTIMIZATION: Memoize MenuItemCard to prevent unnecessary re-renders
+export default memo(MenuItemCard);

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableSession } from '@/context/RestaurantContext';
@@ -21,7 +21,7 @@ const TableCard: React.FC<TableCardProps> = ({
 }) => {
   // Memoize calculations for performance
   const { pendingRequests, completedRequests, hasPending, hasActivity, billPaid, totalBill, status } = useMemo(() => {
-    const pending = session.requests.filter(r => r.status === 'pending');
+    const pending = session.requests.filter(r => r.status === 'pending' || r.status === 'confirmed');
     const completed = session.requests.filter(r => r.status === 'completed');
     const hasPending = pending.length > 0;
   const hasActivity = session.requests.length > 0;
@@ -110,4 +110,5 @@ const TableCard: React.FC<TableCardProps> = ({
   );
 };
 
-export default TableCard;
+// OPTIMIZATION: Memoize TableCard to prevent unnecessary re-renders
+export default memo(TableCard);

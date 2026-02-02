@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Save, X, GripVertical, MoreVertical, Merge, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import {
   DndContext,
   DragOverlay,
@@ -37,7 +45,10 @@ const DraggableMenuItem: React.FC<{
   item: MenuItem;
   onEdit: (item: MenuItem) => void;
   onDelete: (id: string) => void;
-}> = ({ item, onEdit, onDelete }) => {
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  isBulkMode?: boolean;
+}> = ({ item, onEdit, onDelete, isSelected = false, onToggleSelect, isBulkMode = false }) => {
   const {
     attributes,
     listeners,
@@ -57,16 +68,31 @@ const DraggableMenuItem: React.FC<{
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-card border border-border rounded-lg p-4 flex items-center justify-between hover:border-primary/30 transition-colors cursor-grab active:cursor-grabbing"
+      className={`bg-card border rounded-lg p-4 flex items-center justify-between transition-colors ${
+        isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+      } ${isBulkMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
+      onClick={isBulkMode && onToggleSelect ? () => onToggleSelect(item.id) : undefined}
     >
       <div className="flex items-center gap-3 flex-1">
-        <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
-        >
-          <GripVertical className="h-5 w-5" />
-        </div>
+        {isBulkMode && onToggleSelect ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(item.id);
+            }}
+            className="text-primary hover:text-primary/80"
+          >
+            {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+          </button>
+        ) : (
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+        )}
         <div className="flex-1">
           <h3 className="font-medium text-foreground">{item.name}</h3>
           {item.desc && (
@@ -105,10 +131,32 @@ const CategorySection: React.FC<{
   items: MenuItem[];
   onEdit: (item: MenuItem) => void;
   onDelete: (id: string) => void;
-}> = ({ category, items, onEdit, onDelete }) => {
+  onRenameCategory: (oldName: string, newName: string) => void;
+  onDeleteCategory: (categoryName: string) => void;
+  onMergeCategory: (sourceCategory: string) => void;
+  isUnassigned?: boolean;
+  selectedItems?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  isBulkMode?: boolean;
+}> = ({ category, items, onEdit, onDelete, onRenameCategory, onDeleteCategory, onMergeCategory, isUnassigned = false, selectedItems, onToggleSelect, isBulkMode = false }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: category,
   });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(category);
+
+  const handleSaveRename = () => {
+    if (editValue.trim() && editValue.trim() !== category) {
+      onRenameCategory(category, editValue.trim());
+    }
+    setIsEditing(false);
+    setEditValue(category);
+  };
+
+  const handleCancelRename = () => {
+    setIsEditing(false);
+    setEditValue(category);
+  };
 
   return (
     <section
@@ -117,10 +165,66 @@ const CategorySection: React.FC<{
         isOver ? 'bg-primary/10 border-2 border-primary border-dashed' : 'bg-transparent'
       }`}
     >
-      <h2 className="text-xl font-semibold mb-4 text-foreground">
-        {category}
-        {isOver && <span className="ml-2 text-sm text-primary">(Drop here)</span>}
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        {isEditing ? (
+          <div className="flex items-center gap-2 flex-1">
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveRename();
+                if (e.key === 'Escape') handleCancelRename();
+              }}
+              className="text-xl font-semibold"
+              autoFocus
+            />
+            <Button size="sm" onClick={handleSaveRename}>
+              <Save className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleCancelRename}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+              {category}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({items.length} {items.length === 1 ? 'item' : 'items'})
+              </span>
+              {isOver && <span className="ml-2 text-sm text-primary">(Drop here)</span>}
+            </h2>
+            {!isUnassigned && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Rename Category
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMergeCategory(category)}>
+                    <Merge className="h-4 w-4 mr-2" />
+                    Merge Category
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onDeleteCategory(category)}
+                    disabled={items.length > 0}
+                    className={items.length > 0 ? 'text-muted-foreground' : 'text-destructive'}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {items.length > 0 ? `Delete Category (${items.length} items)` : 'Delete Category'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </>
+        )}
+      </div>
       <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-2">
           {items.map(item => (
@@ -129,6 +233,9 @@ const CategorySection: React.FC<{
               item={item}
               onEdit={onEdit}
               onDelete={onDelete}
+              isSelected={selectedItems?.has(item.id) || false}
+              onToggleSelect={onToggleSelect}
+              isBulkMode={isBulkMode}
             />
           ))}
         </div>
@@ -183,6 +290,15 @@ const MenuEditor: React.FC = () => {
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   // Optimistic updates for immediate UI feedback
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Partial<MenuItem>>>(new Map());
+  // Category management state
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [sourceCategoryForMerge, setSourceCategoryForMerge] = useState<string | null>(null);
+  // Bulk selection state
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
+  // Category order state
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -215,7 +331,45 @@ const MenuEditor: React.FC = () => {
   }, {} as Record<string, MenuItem[]>);
 
   // Get all unique categories for creating new ones
-  const allCategories = Object.keys(groupedItems).filter(cat => cat !== '📦 Unassigned');
+  const allCategories = useMemo(() => 
+    Object.keys(groupedItems).filter(cat => cat !== '📦 Unassigned'),
+    [groupedItems]
+  );
+
+  // Load category order from localStorage on mount
+  useEffect(() => {
+    const savedOrder = localStorage.getItem('menuCategoryOrder');
+    if (savedOrder) {
+      try {
+        const parsed = JSON.parse(savedOrder);
+        if (Array.isArray(parsed)) {
+          setCategoryOrder(parsed);
+        }
+      } catch (e) {
+        console.error('Error loading category order:', e);
+      }
+    }
+  }, []);
+
+  // Save category order to localStorage when it changes
+  useEffect(() => {
+    if (categoryOrder.length > 0) {
+      localStorage.setItem('menuCategoryOrder', JSON.stringify(categoryOrder));
+    }
+  }, [categoryOrder]);
+
+  // Sort categories by saved order, then alphabetically
+  const sortedCategories = useMemo(() => {
+    const categories = Object.keys(groupedItems).filter(cat => cat !== '📦 Unassigned');
+    if (categoryOrder.length === 0) {
+      return categories.sort((a, b) => a.localeCompare(b));
+    }
+    
+    // Sort by saved order, then alphabetically for new categories
+    const ordered = categoryOrder.filter(cat => categories.includes(cat));
+    const unordered = categories.filter(cat => !categoryOrder.includes(cat)).sort((a, b) => a.localeCompare(b));
+    return [...ordered, ...unordered];
+  }, [groupedItems, categoryOrder]);
 
   // Clear optimistic updates when menuItems change from real-time subscription
   // This ensures the UI stays in sync with the database
@@ -442,6 +596,183 @@ const MenuEditor: React.FC = () => {
     }
   };
 
+  // Rename category - update all items in that category
+  const handleRenameCategory = async (oldName: string, newName: string) => {
+    if (!newName.trim() || newName.trim() === oldName) return;
+
+    // Check if new category name already exists
+    if (allCategories.includes(newName.trim()) && newName.trim() !== oldName) {
+      toast({
+        title: 'Error',
+        description: 'Category name already exists',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Normalize old name (handle empty string for unassigned)
+    const normalizedOldName = oldName === '📦 Unassigned' ? '' : oldName;
+    const normalizedNewName = newName.trim();
+
+    // Find all items in the old category
+    const itemsToUpdate = displayItems.filter(item => {
+      const itemCategory = item.cat && item.cat.trim() ? item.cat.trim() : '📦 Unassigned';
+      return itemCategory === oldName;
+    });
+
+    if (itemsToUpdate.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'No items found in this category',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Optimistic update
+    setOptimisticUpdates(prev => {
+      const next = new Map(prev);
+      itemsToUpdate.forEach(item => {
+        next.set(item.id, { cat: normalizedNewName });
+      });
+      return next;
+    });
+
+    try {
+      // Update all items in parallel
+      await Promise.all(
+        itemsToUpdate.map(item =>
+          updateMenuItem(item.id, { cat: normalizedNewName })
+        )
+      );
+
+      toast({
+        title: 'Success',
+        description: `Renamed category "${oldName}" to "${newName}" (${itemsToUpdate.length} items updated)`,
+      });
+    } catch (error) {
+      console.error('Error renaming category:', error);
+      // Rollback optimistic update
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        itemsToUpdate.forEach(item => {
+          next.delete(item.id);
+        });
+        return next;
+      });
+      toast({
+        title: 'Error',
+        description: 'Failed to rename category',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Delete empty category
+  const handleDeleteCategory = async (categoryName: string) => {
+    if (categoryName === '📦 Unassigned') {
+      toast({
+        title: 'Error',
+        description: 'Cannot delete Unassigned category',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const itemsInCategory = groupedItems[categoryName] || [];
+    
+    if (itemsInCategory.length > 0) {
+      toast({
+        title: 'Error',
+        description: `Cannot delete category with ${itemsInCategory.length} items. Move items first or merge with another category.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Category is already empty, just show success message
+    toast({
+      title: 'Success',
+      description: `Category "${categoryName}" is already empty and will be removed automatically.`,
+    });
+  };
+
+  // Merge categories - move all items from source to target
+  const handleMergeCategory = (sourceCategory: string) => {
+    if (sourceCategory === '📦 Unassigned') {
+      toast({
+        title: 'Error',
+        description: 'Cannot merge Unassigned category',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const sourceItems = groupedItems[sourceCategory] || [];
+    if (sourceItems.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Source category is empty',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSourceCategoryForMerge(sourceCategory);
+    setMergeDialogOpen(true);
+  };
+
+  const handleConfirmMerge = async (targetCategory: string) => {
+    if (!sourceCategoryForMerge) return;
+
+    const sourceItems = groupedItems[sourceCategoryForMerge] || [];
+    if (sourceItems.length === 0) return;
+
+    // Normalize target category (handle empty string for unassigned)
+    const normalizedTarget = targetCategory === '📦 Unassigned' ? '' : targetCategory;
+
+    // Optimistic update
+    setOptimisticUpdates(prev => {
+      const next = new Map(prev);
+      sourceItems.forEach(item => {
+        next.set(item.id, { cat: normalizedTarget });
+      });
+      return next;
+    });
+
+    try {
+      // Update all items in parallel
+      await Promise.all(
+        sourceItems.map(item =>
+          updateMenuItem(item.id, { cat: normalizedTarget })
+        )
+      );
+
+      toast({
+        title: 'Success',
+        description: `Merged "${sourceCategoryForMerge}" into "${targetCategory}" (${sourceItems.length} items moved)`,
+      });
+
+      setMergeDialogOpen(false);
+      setSourceCategoryForMerge(null);
+    } catch (error) {
+      console.error('Error merging categories:', error);
+      // Rollback optimistic update
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        sourceItems.forEach(item => {
+          next.delete(item.id);
+        });
+        return next;
+      });
+      toast({
+        title: 'Error',
+        description: 'Failed to merge categories',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -467,6 +798,44 @@ const MenuEditor: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {isBulkMode ? (
+                <>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedItems.size} selected
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (selectedItems.size > 0) {
+                        setBulkMoveDialogOpen(true);
+                      }
+                    }}
+                    disabled={selectedItems.size === 0}
+                  >
+                    Move Selected ({selectedItems.size})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsBulkMode(false);
+                      setSelectedItems(new Set());
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBulkMode(true)}
+                  className="gap-2"
+                >
+                  <CheckSquare className="h-4 w-4" />
+                  Bulk Select
+                </Button>
+              )}
               {showNewCategoryInput ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -605,21 +974,31 @@ const MenuEditor: React.FC = () => {
                   items={groupedItems['📦 Unassigned']}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onRenameCategory={handleRenameCategory}
+                  onDeleteCategory={handleDeleteCategory}
+                  onMergeCategory={handleMergeCategory}
+                  isUnassigned={true}
+                  selectedItems={selectedItems}
+                  onToggleSelect={handleToggleSelect}
+                  isBulkMode={isBulkMode}
                 />
               )}
-              {/* Show all other categories */}
-              {Object.entries(groupedItems)
-                .filter(([category]) => category !== '📦 Unassigned')
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([category, items]) => (
-                  <CategorySection
-                    key={category}
-                    category={category}
-                    items={items}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                ))}
+              {/* Show all other categories in sorted order */}
+              {sortedCategories.map(category => (
+                <CategorySection
+                  key={category}
+                  category={category}
+                  items={groupedItems[category] || []}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onRenameCategory={handleRenameCategory}
+                  onDeleteCategory={handleDeleteCategory}
+                  onMergeCategory={handleMergeCategory}
+                  selectedItems={selectedItems}
+                  onToggleSelect={handleToggleSelect}
+                  isBulkMode={isBulkMode}
+                />
+              ))}
               {/* Show empty category placeholder if creating new category - make it droppable */}
               {showNewCategoryInput && newCategoryName.trim() && !allCategories.includes(newCategoryName.trim()) && (
                 <NewCategorySection
@@ -645,6 +1024,112 @@ const MenuEditor: React.FC = () => {
           </DndContext>
         )}
       </main>
+
+      {/* Merge Category Dialog */}
+      <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge Category</DialogTitle>
+            <DialogDescription>
+              Select the target category to merge "{sourceCategoryForMerge}" into. All items from the source category will be moved to the target category.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Source Category</Label>
+              <div className="mt-1 p-3 bg-secondary rounded-lg">
+                <span className="font-semibold">{sourceCategoryForMerge}</span>
+                <span className="text-sm text-muted-foreground ml-2">
+                  ({groupedItems[sourceCategoryForMerge || '']?.length || 0} items)
+                </span>
+              </div>
+            </div>
+            <div>
+              <Label>Target Category</Label>
+              <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                {Object.keys(groupedItems)
+                  .filter(cat => cat !== sourceCategoryForMerge && cat !== '📦 Unassigned')
+                  .sort()
+                  .map(category => (
+                    <Button
+                      key={category}
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => handleConfirmMerge(category)}
+                    >
+                      <span className="font-semibold">{category}</span>
+                      <span className="text-sm text-muted-foreground ml-2">
+                        ({groupedItems[category]?.length || 0} items)
+                      </span>
+                    </Button>
+                  ))}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleConfirmMerge('📦 Unassigned')}
+                >
+                  <span className="font-semibold">📦 Unassigned</span>
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ({groupedItems['📦 Unassigned']?.length || 0} items)
+                  </span>
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => {
+              setMergeDialogOpen(false);
+              setSourceCategoryForMerge(null);
+            }}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Move Dialog */}
+      <Dialog open={bulkMoveDialogOpen} onOpenChange={setBulkMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move Selected Items</DialogTitle>
+            <DialogDescription>
+              Select the target category to move {selectedItems.size} selected item(s) to.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {sortedCategories.map(category => (
+                <Button
+                  key={category}
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleBulkMove(category)}
+                >
+                  <span className="font-semibold">{category}</span>
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ({groupedItems[category]?.length || 0} items)
+                  </span>
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => handleBulkMove('📦 Unassigned')}
+              >
+                <span className="font-semibold">📦 Unassigned</span>
+                <span className="text-sm text-muted-foreground ml-2">
+                  ({groupedItems['📦 Unassigned']?.length || 0} items)
+                </span>
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setBulkMoveDialogOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

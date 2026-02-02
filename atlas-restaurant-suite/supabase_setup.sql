@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS table_requests (
   action TEXT NOT NULL,
   details TEXT,
   total NUMERIC(10, 2) DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'completed')),
   payment_method TEXT CHECK (payment_method IN ('cash', 'card')),
   timestamp BIGINT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),

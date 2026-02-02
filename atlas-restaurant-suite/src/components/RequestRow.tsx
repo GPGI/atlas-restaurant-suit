@@ -1,5 +1,5 @@
-import React from 'react';
-import { Check, Clock, Loader2 } from 'lucide-react';
+import React, { memo, useState } from 'react';
+import { Check, Clock, Loader2, ChefHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableRequest } from '@/context/RestaurantContext';
 import { cn } from '@/lib/utils';
@@ -12,10 +12,18 @@ interface RequestRowProps {
 
 const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete, isCompleting = false }) => {
   const isPending = request.status === 'pending';
+  const isConfirmed = request.status === 'confirmed';
+  const [localConfirmed, setLocalConfirmed] = useState(false);
   const time = new Date(request.timestamp).toLocaleTimeString('bg-BG', {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const handleConfirm = () => {
+    setLocalConfirmed(true);
+    // Call onComplete immediately to update database status
+    onComplete();
+  };
 
   return (
     <div
@@ -62,19 +70,30 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete, isCompleti
           )}
         </div>
         
-        {isPending ? (
+        {(isPending || isConfirmed) ? (
           <Button
             size="sm"
-            className="btn-gold h-9 w-9 sm:h-10 sm:w-auto sm:px-4 text-xs font-semibold touch-manipulation flex-shrink-0"
-            onClick={onComplete}
-            disabled={isCompleting}
-            aria-label="Complete request"
+            className={cn(
+              "h-9 w-9 sm:h-10 sm:w-auto sm:px-4 text-xs font-semibold touch-manipulation flex-shrink-0 transition-all",
+              (isConfirmed || localConfirmed)
+                ? "bg-success text-success-foreground hover:bg-success/90" 
+                : "btn-gold"
+            )}
+            onClick={handleConfirm}
+            disabled={isCompleting || isConfirmed || localConfirmed}
+            aria-label={(isConfirmed || localConfirmed) ? "Order confirmed" : "Confirm order"}
           >
             {isCompleting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (isConfirmed || localConfirmed) ? (
+              <>
+                <ChefHat className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Preparing</span>
+                <span className="sm:hidden">✓</span>
+              </>
             ) : (
               <>
-                <span className="hidden sm:inline">OK</span>
+                <span className="hidden sm:inline">Confirm</span>
                 <span className="sm:hidden">✓</span>
               </>
             )}
@@ -89,4 +108,5 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete, isCompleti
   );
 };
 
-export default RequestRow;
+// OPTIMIZATION: Memoize RequestRow to prevent unnecessary re-renders
+export default memo(RequestRow);
