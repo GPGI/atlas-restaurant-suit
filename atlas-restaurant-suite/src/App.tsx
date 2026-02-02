@@ -28,20 +28,20 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <RestaurantProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
+  <QueryClientProvider client={queryClient}>
+    <RestaurantProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
           <BrowserRouter
             future={{
               v7_startTransition: true,
               v7_relativeSplatPath: true,
             }}
           >
-            <Routes>
+          <Routes>
               <Route path="/" element={<ClientTables />} />
-              <Route path="/menu" element={<CustomerMenu />} />
+            <Route path="/menu" element={<CustomerMenu />} />
               <Route path="/t/:tableNumber" element={<CustomerMenu />} />
               <Route 
                 path="/admin" 
@@ -60,13 +60,13 @@ const App = () => (
                 } 
               />
               <Route path="/index" element={<Index />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </RestaurantProvider>
-    </QueryClientProvider>
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </RestaurantProvider>
+  </QueryClientProvider>
   </ErrorBoundary>
 );
 

@@ -60,17 +60,21 @@ const DraggableMenuItem: React.FC<{
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: isDragging ? 'none' : transition,
+    opacity: isDragging ? 0.4 : 1,
+    scale: isDragging ? 1.05 : 1,
+    zIndex: isDragging ? 50 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`bg-card border rounded-lg p-4 flex items-center justify-between transition-colors ${
-        isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
-      } ${isBulkMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}`}
+      className={`bg-card border rounded-lg p-4 flex items-center justify-between transition-all duration-200 ${
+        isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-primary/30 hover:shadow-sm'
+      } ${isBulkMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${
+        isDragging ? 'shadow-lg ring-2 ring-primary/20' : ''
+      }`}
       onClick={isBulkMode && onToggleSelect ? () => onToggleSelect(item.id) : undefined}
     >
       <div className="flex items-center gap-3 flex-1">
@@ -158,11 +162,17 @@ const CategorySection: React.FC<{
     setEditValue(category);
   };
 
+  // Extract emoji from category name
+  const categoryEmoji = category.match(/^[\p{Emoji}]/u)?.[0] || '📦';
+  const categoryName = category.replace(/^[\p{Emoji}]\s*/, '') || category;
+
   return (
     <section
       ref={setNodeRef}
-      className={`rounded-lg p-4 transition-colors ${
-        isOver ? 'bg-primary/10 border-2 border-primary border-dashed' : 'bg-transparent'
+      className={`rounded-xl p-4 transition-all duration-200 ${
+        isOver 
+          ? 'bg-primary/10 border-2 border-primary border-dashed shadow-md' 
+          : 'bg-gradient-to-br from-background to-muted/20 border border-border/50'
       }`}
     >
       <div className="flex items-center justify-between mb-4">
@@ -187,12 +197,20 @@ const CategorySection: React.FC<{
           </div>
         ) : (
           <>
-            <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-              {category}
+            <h2 
+              className="text-xl font-semibold text-foreground flex items-center gap-3 bg-primary/5 px-4 py-2 rounded-lg border border-primary/10 cursor-pointer hover:bg-primary/10 transition-colors group"
+              onClick={() => !isUnassigned && setIsEditing(true)}
+              title={!isUnassigned ? "Click to rename category" : undefined}
+            >
+              <span className="text-2xl">{categoryEmoji}</span>
+              <span className="flex-1">{categoryName}</span>
               <span className="text-sm font-normal text-muted-foreground">
                 ({items.length} {items.length === 1 ? 'item' : 'items'})
               </span>
-              {isOver && <span className="ml-2 text-sm text-primary">(Drop here)</span>}
+              {isOver && <span className="ml-2 text-sm text-primary font-medium animate-pulse">(Drop here)</span>}
+              {!isUnassigned && (
+                <Edit2 className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
             </h2>
             {!isUnassigned && (
               <DropdownMenu>
@@ -226,19 +244,26 @@ const CategorySection: React.FC<{
         )}
       </div>
       <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2">
-          {items.map(item => (
-            <DraggableMenuItem
-              key={item.id}
-              item={item}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              isSelected={selectedItems?.has(item.id) || false}
-              onToggleSelect={onToggleSelect}
-              isBulkMode={isBulkMode}
-            />
-          ))}
-        </div>
+        {items.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg border-border/50 bg-muted/5">
+            <p className="text-sm font-medium mb-1">No items in this category</p>
+            <p className="text-xs">Drag items here to add them</p>
+          </div>
+        ) : (
+          <div className="space-y-2 animate-in fade-in duration-300">
+            {items.map(item => (
+              <DraggableMenuItem
+                key={item.id}
+                item={item}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                isSelected={selectedItems?.has(item.id) || false}
+                onToggleSelect={onToggleSelect}
+                isBulkMode={isBulkMode}
+              />
+            ))}
+          </div>
+        )}
       </SortableContext>
     </section>
   );
@@ -299,6 +324,8 @@ const MenuEditor: React.FC = () => {
   const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
   // Category order state
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  // Statistics
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -374,6 +401,11 @@ const MenuEditor: React.FC = () => {
   // Clear optimistic updates when menuItems change from real-time subscription
   // This ensures the UI stays in sync with the database
   useEffect(() => {
+    // Update last update time when menuItems change
+    if (menuItems.length > 0) {
+      setLastUpdateTime(new Date());
+    }
+    
     // Clear any optimistic updates that match the current database state
     setOptimisticUpdates(prev => {
       const next = new Map(prev);
@@ -400,6 +432,38 @@ const MenuEditor: React.FC = () => {
       return hasChanges ? next : prev;
     });
   }, [menuItems]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      
+      // Escape to exit bulk mode
+      if (e.key === 'Escape' && isBulkMode && !isInputFocused) {
+        setIsBulkMode(false);
+        setSelectedItems(new Set());
+        e.preventDefault();
+      }
+      
+      // Delete key to delete selected items in bulk mode
+      if ((e.key === 'Delete' || e.key === 'Backspace') && isBulkMode && selectedItems.size > 0 && !isInputFocused) {
+        if (confirm(`Delete ${selectedItems.size} selected item(s)?`)) {
+          const itemsToDelete = Array.from(selectedItems);
+          itemsToDelete.forEach(id => {
+            handleDelete(id);
+          });
+          setSelectedItems(new Set());
+          setIsBulkMode(false);
+        }
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBulkMode, selectedItems]);
 
   const handleAddNew = () => {
     setEditingItem(null);
@@ -460,13 +524,9 @@ const MenuEditor: React.FC = () => {
         setNewCategoryName('');
       }
       
-      // Clear optimistic update immediately after database update
-      // Real-time subscription will sync the actual state very quickly
-      setOptimisticUpdates(prev => {
-        const next = new Map(prev);
-        next.delete(item.id);
-        return next;
-      });
+      // Don't clear optimistic update immediately - let real-time subscription handle it
+      // The useEffect that clears optimistic updates will handle this when menuItems changes
+      // This ensures smooth auto-refresh when the real-time update arrives
       
       toast({
         title: 'Success',
@@ -1033,7 +1093,7 @@ const MenuEditor: React.FC = () => {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="space-y-8">
+            <div className="space-y-8 animate-in fade-in duration-300">
               {/* Show Unassigned first if it exists */}
               {groupedItems['📦 Unassigned'] && (
                 <CategorySection

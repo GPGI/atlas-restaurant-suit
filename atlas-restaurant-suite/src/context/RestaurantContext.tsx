@@ -303,7 +303,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               }
               // If no session_started_at, show all (backward compatibility)
               return true;
-            }
+      }
             return false;
           })
           .map(r => ({
