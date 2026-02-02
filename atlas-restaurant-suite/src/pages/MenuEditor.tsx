@@ -773,6 +773,74 @@ const MenuEditor: React.FC = () => {
     }
   };
 
+  // Toggle item selection in bulk mode
+  const handleToggleSelect = (id: string) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Move selected items to a target category
+  const handleBulkMove = async (targetCategory: string) => {
+    if (selectedItems.size === 0) return;
+
+    // Normalize target category (handle empty string for unassigned)
+    const normalizedTarget = targetCategory === '📦 Unassigned' ? '' : targetCategory;
+
+    // Get selected items
+    const itemsToMove = displayItems.filter(item => selectedItems.has(item.id));
+    if (itemsToMove.length === 0) return;
+
+    // Optimistic update
+    setOptimisticUpdates(prev => {
+      const next = new Map(prev);
+      itemsToMove.forEach(item => {
+        next.set(item.id, { cat: normalizedTarget });
+      });
+      return next;
+    });
+
+    try {
+      // Update all items in parallel
+      await Promise.all(
+        itemsToMove.map(item =>
+          updateMenuItem(item.id, { cat: normalizedTarget })
+        )
+      );
+
+      toast({
+        title: 'Success',
+        description: `Moved ${itemsToMove.length} item(s) to "${targetCategory}"`,
+      });
+
+      // Clear selection and exit bulk mode
+      setSelectedItems(new Set());
+      setIsBulkMode(false);
+      setBulkMoveDialogOpen(false);
+    } catch (error) {
+      console.error('Error moving items:', error);
+      // Rollback optimistic update
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        itemsToMove.forEach(item => {
+          next.delete(item.id);
+        });
+        return next;
+      });
+      toast({
+        title: 'Error',
+        description: 'Failed to move items',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
