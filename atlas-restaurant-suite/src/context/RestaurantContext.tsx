@@ -152,6 +152,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const loadTableSessions = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Cleanup: Delete ALL completed requests from table_requests immediately
+      // This ensures completed requests don't accumulate in the active table
+      // Use delete with .neq() to delete all completed requests in one operation
+      const { data: deletedCompleted, error: cleanupError } = await supabase
+        .from('table_requests')
+        .delete()
+        .eq('status', 'completed')
+        .select('id');
+      
+      if (cleanupError) {
+        console.warn('Error cleaning up completed requests:', cleanupError);
+      } else if (deletedCompleted && deletedCompleted.length > 0) {
+        console.log(`🧹 Cleaned up ${deletedCompleted.length} completed request(s) from table_requests`);
+      }
+      
       // Load all tables
       const { data: tablesData, error: tablesError } = await supabase
         .from('restaurant_tables')
@@ -184,10 +200,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Continue with empty cart if cart fails
       }
 
-      // Load all table requests
+      // Load all table requests - EXCLUDE completed requests at query level
       const { data: requestsData, error: requestsError } = await supabase
         .from('table_requests')
         .select('*')
+        .neq('status', 'completed') // Exclude completed requests at database level
         .order('timestamp', { ascending: false });
 
       if (requestsError) {
@@ -224,6 +241,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .filter(r => {
             // Don't show requests for tables that were just marked as paid
             if (paidTables.has(tableId)) {
+              return false;
+            }
+            
+            // SAFEGUARD: Never show requests with status='completed' - they should be in completed_orders
+            // This prevents showing completed requests that somehow weren't deleted
+            if (r.status === 'completed') {
+              console.warn(`⚠️ Found completed request ${r.id} still in table_requests - should be in completed_orders`);
               return false;
             }
             
@@ -596,7 +620,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       if (cartError) throw cartError;
       if (!cartItems || cartItems.length === 0) return;
-
+      
       const orderDetails = cartItems
         .map(ci => `${ci.quantity}x ${(ci.menu_items as any)?.name}`)
         .join(', ');
@@ -612,13 +636,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .insert({
           id: requestId,
           table_id: tableId,
-          action: '🍽️ NEW ORDER',
-          details: orderDetails,
-          total: orderTotal,
-          status: 'pending',
-          timestamp: Date.now(),
+        action: '🍽️ NEW ORDER',
+        details: orderDetails,
+        total: orderTotal,
+        status: 'pending',
+        timestamp: Date.now(),
         });
-
+      
       // Clear cart immediately after order submission
       // This resets the menu to clean state, but bill requests remain visible
       await supabase
@@ -648,13 +672,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await supabase
         .from('table_requests')
         .insert({
-          id: `req_${Date.now()}`,
+        id: `req_${Date.now()}`,
           table_id: tableId,
-          action: '🔔 WAITER CALL',
-          details: 'Customer requested assistance',
-          total: 0,
-          status: 'pending',
-          timestamp: Date.now(),
+        action: '🔔 WAITER CALL',
+        details: 'Customer requested assistance',
+        total: 0,
+        status: 'pending',
+        timestamp: Date.now(),
         });
     } catch (error) {
       console.error('Error calling waiter:', error);
@@ -669,20 +693,20 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .select('total')
         .eq('table_id', tableId)
         .eq('status', 'completed');
-
+      
       const totalBill = (requests || []).reduce((sum, r) => sum + parseFloat(r.total || '0'), 0);
-
+      
       // Create bill request
       await supabase
         .from('table_requests')
         .insert({
-          id: `req_${Date.now()}`,
+        id: `req_${Date.now()}`,
           table_id: tableId,
-          action: '💳 BILL REQUEST',
-          details: `Payment: ${paymentMethod === 'cash' ? 'Cash' : 'Card'}`,
-          total: totalBill,
-          status: 'pending',
-          timestamp: Date.now(),
+        action: '💳 BILL REQUEST',
+        details: `Payment: ${paymentMethod === 'cash' ? 'Cash' : 'Card'}`,
+        total: totalBill,
+        status: 'pending',
+        timestamp: Date.now(),
           payment_method: paymentMethod,
         });
 
@@ -697,9 +721,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const completeRequest = useCallback(async (tableId: string, requestId: string) => {
-    // Get the request data before deleting (for moving to completed_orders)
-    const requestToComplete = tables[tableId]?.requests.find(r => r.id === requestId);
-    
     // Optimistic update: remove request from local state immediately
     setTables(prev => {
       const updated = { ...prev };
@@ -714,50 +735,84 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     try {
-      // Move request to completed_orders before deleting
-      if (requestToComplete) {
-        const { error: moveError } = await supabase
-          .from('completed_orders')
-          .upsert({
-            id: `completed_${requestId}_${Date.now()}`,
-            table_id: tableId,
-            action: requestToComplete.action,
-            details: requestToComplete.details || '',
-            total: requestToComplete.total,
-            status: 'completed',
-            timestamp: requestToComplete.timestamp,
-            payment_method: requestToComplete.paymentMethod || null,
-          }, {
-            onConflict: 'id',
-            ignoreDuplicates: false
-          });
+      // Step 1: Fetch the request directly from database to ensure we have complete data
+      const { data: requestData, error: fetchError } = await supabase
+        .from('table_requests')
+        .select('*')
+        .eq('id', requestId)
+        .eq('table_id', tableId)
+        .single();
 
-        if (moveError) {
-          console.warn('Error moving to completed_orders (non-critical):', moveError);
-          // Continue with deletion even if move fails
-        }
+      if (fetchError) {
+        console.error('Error fetching request to complete:', fetchError);
+        // Rollback optimistic update
+        loadTableSessions();
+        throw fetchError;
       }
 
-      // Delete request from table_requests (remove from active view)
-      const { error } = await supabase
+      if (!requestData) {
+        console.warn(`Request ${requestId} not found in database`);
+        // Rollback optimistic update
+        loadTableSessions();
+        return;
+      }
+
+      // Step 2: Move request to completed_orders table
+      const { error: moveError } = await supabase
+        .from('completed_orders')
+        .insert({
+          id: `completed_${requestId}_${Date.now()}`,
+          table_id: tableId,
+          action: requestData.action,
+          details: requestData.details || '',
+          total: parseFloat(requestData.total || '0'),
+          status: 'completed',
+          timestamp: requestData.timestamp,
+          payment_method: requestData.payment_method || null,
+        });
+
+      if (moveError) {
+        console.error('Error moving to completed_orders:', moveError);
+        // Continue with deletion even if move fails (non-critical)
+        // But log it for debugging
+      } else {
+        console.log(`✅ Moved request ${requestId} to completed_orders`);
+      }
+
+      // Step 3: Delete request from table_requests (remove from active view)
+      const { data: deletedData, error: deleteError } = await supabase
         .from('table_requests')
         .delete()
-        .eq('id', requestId);
+        .eq('id', requestId)
+        .eq('table_id', tableId)
+        .select();
       
-      if (error) {
-        console.error('Error deleting request:', error);
+      if (deleteError) {
+        console.error('Error deleting request:', deleteError);
         // Rollback on error
         loadTableSessions();
-        throw error;
+        throw deleteError;
       }
-      
-      console.log(`✅ Completed and removed request ${requestId} from table_requests`);
-      // Real-time subscription will sync
+
+      // Log deletion result
+      if (deletedData && deletedData.length > 0) {
+        console.log(`✅ Deleted request ${requestId} from table_requests`);
+      } else {
+        // Request might have already been deleted by another client
+        // This is fine - just means it was already gone
+        console.log(`ℹ️ Request ${requestId} was not found (may have already been deleted)`);
+      }
+
+      // Real-time subscription will automatically update the UI when the delete propagates
+      // No need for manual verification or force reload - trust the database operation
+      // The optimistic update already removed it from the UI, and real-time will keep it in sync
     } catch (error) {
       console.error('Error completing request:', error);
+      // Rollback optimistic update on error
+      loadTableSessions();
       throw error;
     }
-  }, [loadTableSessions, tables]);
+  }, [loadTableSessions]);
 
   const markAsPaid = useCallback(async (tableId: string) => {
     // Get current table data before clearing for archive
@@ -1229,22 +1284,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     updateMenuItem,
     deleteMenuItem,
   }), [
-    tables,
+      tables,
     menuItems,
     loading,
-    getTableSession,
-    addToCart,
-    removeFromCart,
-    updateCartQuantity,
-    clearCart,
-    submitOrder,
-    callWaiter,
-    requestBill,
-    completeRequest,
+      getTableSession,
+      addToCart,
+      removeFromCart,
+      updateCartQuantity,
+      clearCart,
+      submitOrder,
+      callWaiter,
+      requestBill,
+      completeRequest,
     markAsPaid,
-    resetTable,
-    getCartTotal,
-    getCartItemCount,
+      resetTable,
+      getCartTotal,
+      getCartItemCount,
     addMenuItem,
     updateMenuItem,
     deleteMenuItem,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Utensils, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,13 +31,14 @@ const playAlertSound = () => {
 const StaffDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { tables, completeRequest, markAsPaid, resetTable, loading } = useRestaurant();
+  const { tables, completeRequest, markAsPaid, loading } = useRestaurant();
   const prevPendingCountRef = useRef<number>(0);
+  const [completingRequests, setCompletingRequests] = useState<Set<string>>(new Set());
   
   // Get all table IDs in order - memoized
   const tableIds = useMemo(() => 
     Array.from({ length: 10 }, (_, i) => 
-      `Table_${String(i + 1).padStart(2, '0')}`
+    `Table_${String(i + 1).padStart(2, '0')}`
     ), []
   );
 
@@ -64,11 +65,20 @@ const StaffDashboard: React.FC = () => {
   }, [totalPending]);
 
   const handleCompleteRequest = useCallback(async (tableId: string, requestId: string) => {
+    const requestKey = `${tableId}_${requestId}`;
+    
+    // Prevent double-clicks
+    if (completingRequests.has(requestKey)) {
+      return;
+    }
+    
+    setCompletingRequests(prev => new Set(prev).add(requestKey));
+    
     try {
       await completeRequest(tableId, requestId);
       toast({
         title: '✅ Заявката е завършена',
-        description: 'Заявката е маркирана като завършена',
+        description: 'Заявката е маркирана като завършена и преместена в архива',
       });
     } catch (error) {
       console.error('Error completing request:', error);
@@ -77,8 +87,14 @@ const StaffDashboard: React.FC = () => {
         description: 'Неуспешно завършване на заявка',
         variant: 'destructive',
       });
+    } finally {
+      setCompletingRequests(prev => {
+        const next = new Set(prev);
+        next.delete(requestKey);
+        return next;
+      });
     }
-  }, [completeRequest, toast]);
+  }, [completeRequest, toast, completingRequests]);
 
   const handleMarkAsPaid = useCallback(async (tableId: string) => {
     const tableName = tableId.replace('_', ' ');
@@ -103,39 +119,6 @@ const StaffDashboard: React.FC = () => {
     }
   }, [markAsPaid, toast]);
 
-  const handleResetTable = useCallback(async (tableId: string) => {
-    const tableName = tableId.replace('_', ' ');
-    if (!confirm(`Сигурни ли сте, че искате да нулирате ${tableName}?\n\nТова ще изтрие всички заявки и количката за тази таблица.`)) {
-      return;
-    }
-    
-    try {
-      await resetTable(tableId);
-      toast({
-        title: '✅ Таблицата е нулирана',
-        description: `${tableName} е нулирана успешно`,
-        duration: 3000,
-      });
-    } catch (error) {
-      console.error('Error resetting table:', error);
-      // Don't show error toast if it's a context error (likely a race condition)
-      if (error instanceof Error && error.message.includes('RestaurantProvider')) {
-        console.warn('Context error during reset (likely race condition), ignoring...');
-        // Still show success since the operation likely completed
-        toast({
-          title: '✅ Таблицата е нулирана',
-          description: `${tableName} е нулирана успешно`,
-          duration: 3000,
-        });
-        return;
-      }
-      toast({
-        title: 'Грешка',
-        description: 'Неуспешно нулиране на таблица. Моля опитайте отново.',
-        variant: 'destructive',
-      });
-    }
-  }, [resetTable, toast]);
 
   return (
     <div className="min-h-screen pb-20 sm:pb-24">
@@ -211,26 +194,26 @@ const StaffDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6 stagger-children">
-            {tableIds.map(tableId => {
-              const session = tables[tableId] || {
-                tableId,
-                isLocked: false,
-                cart: [],
-                requests: [],
-                isVip: false,
-              };
-              
-              return (
-                <TableCard
-                  key={tableId}
-                  session={session}
-                  onCompleteRequest={(requestId) => handleCompleteRequest(tableId, requestId)}
-                  onMarkAsPaid={() => handleMarkAsPaid(tableId)}
-                  onReset={() => handleResetTable(tableId)}
-                />
-              );
-            })}
-          </div>
+          {tableIds.map(tableId => {
+            const session = tables[tableId] || {
+              tableId,
+              isLocked: false,
+              cart: [],
+              requests: [],
+              isVip: false,
+            };
+            
+            return (
+              <TableCard
+                key={tableId}
+                session={session}
+                onCompleteRequest={(requestId) => handleCompleteRequest(tableId, requestId)}
+                onMarkAsPaid={() => handleMarkAsPaid(tableId)}
+                completingRequests={completingRequests}
+              />
+            );
+          })}
+        </div>
         )}
       </main>
 

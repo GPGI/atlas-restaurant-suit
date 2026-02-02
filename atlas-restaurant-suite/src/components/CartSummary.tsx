@@ -54,20 +54,20 @@ const CartSummary: React.FC<CartSummaryProps> = ({
     >
       <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
         <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-      </div>
+        </div>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground truncate">
           {itemCount} {itemCount === 1 ? 'артикул' : 'артикула'}
-        </p>
+          </p>
         <p className="font-semibold text-foreground text-sm sm:text-base truncate">
-          {total.toFixed(2)} лв
-        </p>
-      </div>
+            {total.toFixed(2)} лв
+          </p>
+        </div>
       {/* Badge indicator */}
       {itemCount > 0 && (
         <div className="ml-auto h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-primary text-white text-[10px] sm:text-xs font-bold flex items-center justify-center flex-shrink-0 animate-pulse-quantity">
           {itemCount > 99 ? '99+' : itemCount}
-        </div>
+      </div>
       )}
     </div>
   );

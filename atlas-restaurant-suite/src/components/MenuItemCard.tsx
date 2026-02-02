@@ -137,8 +137,8 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
               </Button>
               <div className="min-w-[36px] sm:min-w-[40px] text-center">
                 <span className="inline-flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 text-primary font-medium text-sm sm:text-base">
-                  {quantity}
-                </span>
+                {quantity}
+              </span>
               </div>
             </>
           )}

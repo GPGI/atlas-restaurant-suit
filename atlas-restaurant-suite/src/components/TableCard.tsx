@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { RotateCcw, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableSession } from '@/context/RestaurantContext';
 import StatusBadge from './StatusBadge';
@@ -10,26 +10,26 @@ interface TableCardProps {
   session: TableSession;
   onCompleteRequest: (requestId: string) => void;
   onMarkAsPaid: () => void;
-  onReset: () => void;
+  completingRequests?: Set<string>;
 }
 
 const TableCard: React.FC<TableCardProps> = ({
   session,
   onCompleteRequest,
   onMarkAsPaid,
-  onReset,
+  completingRequests = new Set(),
 }) => {
   // Memoize calculations for performance
   const { pendingRequests, completedRequests, hasPending, hasActivity, billPaid, totalBill, status } = useMemo(() => {
     const pending = session.requests.filter(r => r.status === 'pending');
     const completed = session.requests.filter(r => r.status === 'completed');
     const hasPending = pending.length > 0;
-    const hasActivity = session.requests.length > 0;
-    const billPaid = session.requests.some(
-      r => r.action === '💳 BILL REQUEST' && r.status === 'completed'
-    );
-    const totalBill = session.requests.reduce((sum, r) => sum + r.total, 0);
-    
+  const hasActivity = session.requests.length > 0;
+  const billPaid = session.requests.some(
+    r => r.action === '💳 BILL REQUEST' && r.status === 'completed'
+  );
+  const totalBill = session.requests.reduce((sum, r) => sum + r.total, 0);
+
     let status: 'free' | 'occupied' | 'alert';
     if (hasPending) status = 'alert';
     else if (hasActivity) status = 'occupied';
@@ -58,30 +58,17 @@ const TableCard: React.FC<TableCardProps> = ({
         
         <div className="flex items-center gap-2 flex-shrink-0">
           {hasPending && !session.isLocked && (
-            <Button
-              size="sm"
+          <Button
+            size="sm"
               className="btn-gold text-xs h-8 sm:h-9 px-2 sm:px-3 touch-manipulation"
               onClick={onMarkAsPaid}
               aria-label={`Mark ${session.tableId} as paid`}
-            >
+          >
               <CheckCircle2 className="h-3 w-3 sm:mr-1" />
               <span className="hidden sm:inline">Mark Paid</span>
               <span className="sm:hidden">Paid</span>
-            </Button>
-          )}
-          {hasActivity && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs border-primary/30 hover:bg-primary/10 h-8 sm:h-9 px-2 sm:px-3 touch-manipulation"
-              onClick={onReset}
-              aria-label={`Reset ${session.tableId}`}
-            >
-              <RotateCcw className="h-3 w-3 sm:mr-1" />
-              <span className="hidden sm:inline">Reset</span>
-              <span className="sm:hidden">Rst</span>
-            </Button>
-          )}
+          </Button>
+        )}
         </div>
       </div>
 
@@ -93,14 +80,15 @@ const TableCard: React.FC<TableCardProps> = ({
           </p>
         ) : (
           <div className="space-y-2 stagger-children">
-            {/* Show pending first, then completed */}
-            {[...pendingRequests, ...completedRequests]
+            {/* Only show pending requests - completed requests should be deleted from table_requests */}
+            {pendingRequests
               .sort((a, b) => b.timestamp - a.timestamp)
               .map(request => (
                 <RequestRow
                   key={request.id}
                   request={request}
                   onComplete={() => onCompleteRequest(request.id)}
+                  isCompleting={completingRequests.has(`${session.tableId}_${request.id}`)}
                 />
               ))}
           </div>

@@ -60,11 +60,11 @@ const PremiumMenu: React.FC = () => {
     }
     try {
       await addToCart(tableId, {
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: 1,
-      });
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+    });
     } catch (error) {
       console.error('Error adding item to cart:', error);
     }
@@ -73,7 +73,7 @@ const PremiumMenu: React.FC = () => {
   const handleRemoveItem = async (itemId: string) => {
     if (session.isLocked) return;
     try {
-      const currentQty = getItemQuantity(itemId);
+    const currentQty = getItemQuantity(itemId);
       await updateCartQuantity(tableId, itemId, currentQty - 1);
     } catch (error) {
       console.error('Error removing item from cart:', error);
@@ -89,10 +89,10 @@ const PremiumMenu: React.FC = () => {
     
     try {
       await submitOrder(tableId);
-      toast({
-        title: '✅ Order Submitted',
-        description: 'Your order is being prepared with care.',
-      });
+    toast({
+      title: '✅ Order Submitted',
+      description: 'Your order is being prepared with care.',
+    });
     } catch (error) {
       console.error('Error submitting order:', error);
       toast({
@@ -112,10 +112,10 @@ const PremiumMenu: React.FC = () => {
     
     try {
       await callWaiter(tableId);
-      toast({
-        title: '🔔 Staff Notified',
-        description: 'Someone will be with you shortly.',
-      });
+    toast({
+      title: '🔔 Staff Notified',
+      description: 'Someone will be with you shortly.',
+    });
     } catch (error) {
       console.error('Error calling waiter:', error);
       toast({
@@ -130,10 +130,10 @@ const PremiumMenu: React.FC = () => {
     setPaymentModalOpen(false);
     try {
       await requestBill(tableId, method);
-      toast({
-        title: '💳 Bill Requested',
-        description: `Payment method: ${method === 'cash' ? 'Cash' : 'Card'}`,
-      });
+    toast({
+      title: '💳 Bill Requested',
+      description: `Payment method: ${method === 'cash' ? 'Cash' : 'Card'}`,
+    });
     } catch (error) {
       console.error('Error requesting bill:', error);
       toast({

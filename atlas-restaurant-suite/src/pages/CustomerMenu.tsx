@@ -115,11 +115,11 @@ const CustomerMenu: React.FC = () => {
     
     try {
       await addToCart(tableId, {
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: 1,
-      });
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+    });
       // Only show toast on first add, not on subsequent adds
       const currentQty = getItemQuantity(item.id);
       if (currentQty === 1) {
@@ -153,7 +153,7 @@ const CustomerMenu: React.FC = () => {
     setLoadingItems(prev => new Set(prev).add(itemId));
     
     try {
-      const currentQty = getItemQuantity(itemId);
+    const currentQty = getItemQuantity(itemId);
       await updateCartQuantity(tableId, itemId, currentQty - 1);
     } catch (error) {
       console.error('Error removing item from cart:', error);
@@ -253,10 +253,10 @@ const CustomerMenu: React.FC = () => {
     setIsSubmitting(true);
     try {
       await submitOrder(tableId);
-      toast({
-        title: '✅ Поръчката е изпратена',
-        description: 'Благодарим ви! Ще я приготвим скоро.',
-      });
+    toast({
+      title: '✅ Поръчката е изпратена',
+      description: 'Благодарим ви! Ще я приготвим скоро.',
+    });
     } catch (error) {
       console.error('Error submitting order:', error);
       toast({
@@ -274,10 +274,10 @@ const CustomerMenu: React.FC = () => {
     
     try {
       await callWaiter(tableId);
-      toast({
-        title: '🔔 Сервитьорът е повикан',
-        description: 'Моля, изчакайте.',
-      });
+    toast({
+      title: '🔔 Сервитьорът е повикан',
+      description: 'Моля, изчакайте.',
+    });
     } catch (error) {
       console.error('Error calling waiter:', error);
       toast({
@@ -292,10 +292,10 @@ const CustomerMenu: React.FC = () => {
     setPaymentModalOpen(false);
     try {
       await requestBill(tableId, method);
-      toast({
-        title: '💳 Заявка за сметка',
-        description: `Плащане: ${method === 'cash' ? 'В брой' : 'С карта'}`,
-      });
+    toast({
+      title: '💳 Заявка за сметка',
+      description: `Плащане: ${method === 'cash' ? 'В брой' : 'С карта'}`,
+    });
     } catch (error) {
       console.error('Error requesting bill:', error);
       toast({
@@ -369,7 +369,7 @@ const CustomerMenu: React.FC = () => {
               </div>
             </div>
             <div className="flex-shrink-0" onClick={() => setCartDrawerOpen(true)}>
-              <CartSummary itemCount={cartItemCount} total={cartTotal} />
+            <CartSummary itemCount={cartItemCount} total={cartTotal} />
             </div>
           </div>
         </div>
@@ -383,8 +383,8 @@ const CustomerMenu: React.FC = () => {
               {/* Elegant Category Header */}
               <div className="mb-4 sm:mb-6 md:mb-8">
                 <h2 className="font-display text-xl sm:text-2xl font-light text-foreground tracking-wide mb-2">
-                  {category}
-                </h2>
+                {category}
+              </h2>
                 <div className="h-px w-12 sm:w-16 bg-primary/40" />
               </div>
               

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Clock } from 'lucide-react';
+import { Check, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableRequest } from '@/context/RestaurantContext';
 import { cn } from '@/lib/utils';
@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils';
 interface RequestRowProps {
   request: TableRequest;
   onComplete: () => void;
+  isCompleting?: boolean;
 }
 
-const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete }) => {
+const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete, isCompleting = false }) => {
   const isPending = request.status === 'pending';
   const time = new Date(request.timestamp).toLocaleTimeString('bg-BG', {
     hour: '2-digit',
@@ -47,7 +48,7 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete }) => {
               ) : (
                 // Single line or no commas - show as is
                 <div className="leading-relaxed whitespace-normal break-words">
-                  {request.details}
+            {request.details}
                 </div>
               )
             ) : (
@@ -66,10 +67,17 @@ const RequestRow: React.FC<RequestRowProps> = ({ request, onComplete }) => {
             size="sm"
             className="btn-gold h-9 w-9 sm:h-10 sm:w-auto sm:px-4 text-xs font-semibold touch-manipulation flex-shrink-0"
             onClick={onComplete}
+            disabled={isCompleting}
             aria-label="Complete request"
           >
-            <span className="hidden sm:inline">OK</span>
-            <span className="sm:hidden">✓</span>
+            {isCompleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <span className="hidden sm:inline">OK</span>
+                <span className="sm:hidden">✓</span>
+              </>
+            )}
           </Button>
         ) : (
           <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0">
