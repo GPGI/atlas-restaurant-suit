@@ -23,26 +23,44 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // CRITICAL: React and React DOM MUST be in the main bundle
-          // Keep React in main bundle to ensure it's always available first
+          // CRITICAL: React and ALL React-dependent libraries MUST be in main bundle
+          // This ensures React is available before any code tries to use it
+          
+          // React core libraries
           if (id.includes('node_modules/react/') || 
               id.includes('node_modules/react-dom/') ||
               id.includes('node_modules/react/jsx-runtime')) {
             return undefined; // Include in main bundle
           }
           
-          // CRITICAL: Any code that uses React.createContext or React hooks
-          // must also be in main bundle or load after React
-          // This includes our context files and React-dependent UI components
-          if (id.includes('src/context/') || 
-              id.includes('src/components/ui/') ||
-              id.includes('@radix-ui')) {
-            return undefined; // Include in main bundle to ensure React is available
+          // ALL React-dependent libraries - must be in main bundle
+          // These libraries use React hooks, context, or components
+          const reactDependentLibs = [
+            '@radix-ui',           // UI components using React.createContext
+            '@tanstack/react-query', // Uses React hooks
+            'react-hook-form',     // Uses React hooks
+            'react-router',        // Uses React components
+            'react-day-picker',    // React component library
+            'react-resizable-panels', // React component library
+            'embla-carousel-react', // React component library
+            'qrcode.react',        // React component library
+            'recharts',            // React chart library
+            'sonner',              // React toast library
+            'lucide-react',        // React icon library
+            'next-themes',         // React theme library
+            'vaul',                // React drawer library (uses React)
+          ];
+          
+          if (reactDependentLibs.some(lib => id.includes(lib))) {
+            return undefined; // Include in main bundle
           }
           
-          // React Router - depends on React, but can be lazy loaded
-          if (id.includes('react-router')) {
-            return 'vendor-router';
+          // Our React-dependent source code
+          if (id.includes('src/context/') || 
+              id.includes('src/components/ui/') ||
+              id.includes('src/App.tsx') ||
+              id.includes('src/main.tsx')) {
+            return undefined; // Include in main bundle
           }
           
           // Admin pages - only loaded when staff accesses admin
@@ -61,11 +79,11 @@ export default defineConfig(({ mode }) => ({
           }
           
           // Other vendor libraries (but NOT React or React-dependent code)
+          // Only include truly non-React libraries in vendor chunk
           if (id.includes('node_modules') && 
               !id.includes('react') && 
               !id.includes('react-dom') &&
-              !id.includes('react-router') &&
-              !id.includes('@radix-ui')) {
+              !reactDependentLibs.some(lib => id.includes(lib))) {
             return 'vendor';
           }
         }
