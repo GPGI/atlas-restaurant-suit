@@ -95,12 +95,32 @@ for (let i = 1; i <= 10; i++) {
   };
 }
 
+// Database types
+interface DatabaseMenuItem {
+  id: string;
+  cat: string;
+  name: string;
+  price: number | string;
+  description?: string | null;
+}
+
+interface DatabaseCartItem {
+  menu_item_id: string;
+  quantity: number;
+  menu_items: DatabaseMenuItem | null;
+}
+
+interface DatabaseError {
+  code?: string;
+  message?: string;
+}
+
 // Helper function to map database item to MenuItem
-const mapMenuItem = (item: any): MenuItem => ({
+const mapMenuItem = (item: DatabaseMenuItem): MenuItem => ({
   id: item.id,
   cat: item.cat,
   name: item.name,
-  price: parseFloat(item.price),
+  price: parseFloat(String(item.price)),
   desc: item.description || undefined,
   description: item.description || undefined,
 });
@@ -232,12 +252,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Get cart items for this table
         const cartItems: CartItem[] = (cartData || [])
           .filter(ci => ci.table_id === tableId)
-          .map(ci => ({
-            id: ci.menu_item_id,
-            name: (ci.menu_items as any)?.name || '',
-            price: parseFloat((ci.menu_items as any)?.price || '0'),
-            quantity: ci.quantity,
-          }));
+          .map(ci => {
+            const menuItem = ci.menu_items as DatabaseMenuItem | null;
+            return {
+              id: ci.menu_item_id,
+              name: menuItem?.name || '',
+              price: parseFloat(String(menuItem?.price || '0')),
+              quantity: ci.quantity,
+            };
+          });
 
         // Get requests for this table - only show current session requests
         // Filter by session_started_at to hide previous session orders
@@ -310,7 +333,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setTables(defaultTables);
       setLoading(false);
     }
-  }, [lastCleanup]);
+  }, [lastCleanup, paidTables]); // paidTables is used in filter
 
   useEffect(() => {
     loadTableSessions();
@@ -497,7 +520,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Rollback on error - reload from server
       loadTableSessions();
       // Retry with exponential backoff for network errors
-      if ((error as any)?.code === 'PGRST301' || (error as any)?.message?.includes('fetch')) {
+      const dbError = error as DatabaseError;
+      if (dbError?.code === 'PGRST301' || dbError?.message?.includes('fetch')) {
         try {
           await retryWithBackoff(async () => {
             const { data: existingCartItem } = await supabase
@@ -643,7 +667,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       loadTableSessions();
       throw error;
     }
-  }, [loadTableSessions, tables]);
+  }, [loadTableSessions]); // tables not needed - we use setTables which is stable
 
   const submitOrder = useCallback(async (tableId: string) => {
     try {
@@ -660,10 +684,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (!cartItems || cartItems.length === 0) return;
       
       const orderDetails = cartItems
-        .map(ci => `${ci.quantity}x ${(ci.menu_items as any)?.name}`)
+        .map(ci => {
+          const menuItem = ci.menu_items as DatabaseMenuItem | null;
+          return `${ci.quantity}x ${menuItem?.name || 'Unknown'}`;
+        })
         .join(', ');
       const orderTotal = cartItems.reduce(
-        (sum, ci) => sum + (parseFloat((ci.menu_items as any)?.price || '0') * ci.quantity),
+        (sum, ci) => {
+          const menuItem = ci.menu_items as DatabaseMenuItem | null;
+          return sum + (parseFloat(String(menuItem?.price || '0')) * ci.quantity);
+        },
         0
       );
 
@@ -703,7 +733,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.error('Error submitting order:', error);
       throw error;
     }
-  }, [tables]);
+  }, []); // No dependencies - we fetch from database and use setTables (stable)
 
   const callWaiter = useCallback(async (tableId: string) => {
     try {
@@ -1191,13 +1221,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const table = tables[tableId];
     if (!table) return 0;
     return table.cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-  }, [tables]);
+  }, [tables]); // tables is needed to access cart data
 
   const getCartItemCount = useCallback((tableId: string): number => {
     const table = tables[tableId];
     if (!table) return 0;
     return table.cart.reduce((sum, i) => sum + i.quantity, 0);
-  }, [tables]);
+  }, [tables]); // tables is needed to access cart data
 
   // OPTIMIZATION: Memoize grouped menu items to avoid recalculating on every render
   const groupedMenuItems = useMemo(() => {
@@ -1231,7 +1261,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const updateMenuItem = useCallback(async (id: string, updates: Partial<MenuItem>) => {
     try {
-      const updateData: any = {};
+      const updateData: Partial<DatabaseMenuItem> = {};
       if (updates.cat !== undefined) updateData.cat = updates.cat;
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.price !== undefined) updateData.price = updates.price;

@@ -99,9 +99,9 @@ const CustomerMenu: React.FC = () => {
   }, [session.cart]);
 
   // Debounce helper
-  const debounce = useCallback((func: Function, wait: number) => {
+  const debounce = useCallback(<T extends (...args: unknown[]) => void>(func: T, wait: number) => {
     let timeout: NodeJS.Timeout;
-    return (...args: any[]) => {
+    return (...args: Parameters<T>) => {
       clearTimeout(timeout);
       timeout = setTimeout(() => func(...args), wait);
     };
