@@ -105,10 +105,21 @@ export default defineConfig(({ mode }) => ({
         }
       }
     },
-    // OPTIMIZATION: Use esbuild for faster builds (default, but explicit)
-    minify: 'esbuild',
-    // Note: Console.logs will remain in production for debugging
-    // To remove them, install terser: npm install -D terser
-    // and change minify to 'terser' with drop_console option
+    // PRODUCTION: Use terser for better minification and console removal
+    minify: mode === 'production' ? 'terser' : 'esbuild',
+    terserOptions: mode === 'production' ? {
+      compress: {
+        drop_console: true, // Remove all console.* calls in production
+        drop_debugger: true, // Remove debugger statements
+        pure_funcs: ['console.log', 'console.info', 'console.debug'], // Remove specific console methods
+      },
+      format: {
+        comments: false, // Remove all comments
+      },
+    } : undefined,
+    // Source maps for production debugging (optional - disable for smaller builds)
+    sourcemap: mode === 'production' ? false : true,
+    // Chunk size warning limit (increase for production)
+    chunkSizeWarningLimit: 1000,
   }
 }));

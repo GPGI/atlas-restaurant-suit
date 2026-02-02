@@ -1,5 +1,5 @@
 // Service Worker for offline support
-const CACHE_NAME = 'atlas-house-v3';
+const CACHE_NAME = 'atlas-house-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -12,8 +12,8 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         // Don't fail if cache.addAll fails
-        return cache.addAll(urlsToCache).catch((err) => {
-          console.warn('Service Worker: Cache addAll failed', err);
+        return cache.addAll(urlsToCache).catch(() => {
+          // Silently fail in production
         });
       })
   );
@@ -27,7 +27,6 @@ self.addEventListener('activate', (event) => {
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => {
-            console.log('Service Worker: Deleting old cache', name);
             return caches.delete(name);
           })
       );
@@ -61,17 +60,16 @@ self.addEventListener('fetch', (event) => {
           if (response && response.status === 200 && response.type === 'basic') {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache).catch((err) => {
-                console.warn('Service Worker: Cache put failed', err);
+              cache.put(request, responseToCache).catch(() => {
+                // Silently fail in production
               });
-            }).catch((err) => {
-              console.warn('Service Worker: Cache open failed', err);
+            }).catch(() => {
+              // Silently fail in production
             });
           }
           return response;
         })
-        .catch((error) => {
-          console.warn('Service Worker: Network fetch failed, trying cache', error);
+        .catch(() => {
           // If network fails, try cache
           return caches.match(request).then((cachedResponse) => {
             if (cachedResponse) {
@@ -98,17 +96,16 @@ self.addEventListener('fetch', (event) => {
           if (response && response.status === 200) {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache).catch((err) => {
-                console.warn('Service Worker: Cache put failed for HTML', err);
+              cache.put(request, responseToCache).catch(() => {
+                // Silently fail in production
               });
-            }).catch((err) => {
-              console.warn('Service Worker: Cache open failed for HTML', err);
+            }).catch(() => {
+              // Silently fail in production
             });
           }
           return response;
         })
-        .catch((error) => {
-          console.warn('Service Worker: Network fetch failed for HTML, trying cache', error);
+        .catch(() => {
           // If network fails, try cache
           return caches.match(request).then((cachedResponse) => {
             if (cachedResponse) {
@@ -124,8 +121,7 @@ self.addEventListener('fetch', (event) => {
 
   // For other requests, try network first, don't intercept if it fails
   event.respondWith(
-    fetch(request).catch((error) => {
-      console.warn('Service Worker: Fetch failed, returning error', error);
+    fetch(request).catch(() => {
       // Return a proper error response instead of failing silently
       return new Response('Network error', {
         status: 408,
