@@ -23,9 +23,19 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // React and React DOM should be in vendor chunk (loaded first)
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-            return 'vendor-react';
+          // CRITICAL: React and React DOM MUST be in the main bundle or load first
+          // Don't split React - it causes loading order issues
+          // Keep React in main bundle to ensure it's always available
+          if (id.includes('node_modules/react/') || 
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react/jsx-runtime')) {
+            // Return undefined to include in main bundle
+            return undefined;
+          }
+          
+          // React Router - depends on React
+          if (id.includes('react-router')) {
+            return 'vendor-router';
           }
           
           // Admin pages - only loaded when staff accesses admin
@@ -38,7 +48,7 @@ export default defineConfig(({ mode }) => ({
             return 'dnd';
           }
           
-          // UI libraries - shared across app (but React must be available)
+          // UI libraries - shared across app (depends on React)
           if (id.includes('@radix-ui')) {
             return 'ui';
           }
@@ -48,13 +58,11 @@ export default defineConfig(({ mode }) => ({
             return 'supabase';
           }
           
-          // React Router
-          if (id.includes('react-router')) {
-            return 'vendor-router';
-          }
-          
-          // Other vendor libraries
-          if (id.includes('node_modules')) {
+          // Other vendor libraries (but NOT React)
+          if (id.includes('node_modules') && 
+              !id.includes('react') && 
+              !id.includes('react-dom') &&
+              !id.includes('react-router')) {
             return 'vendor';
           }
         }
