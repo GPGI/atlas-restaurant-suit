@@ -335,8 +335,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const menuSubscription = supabase
       .channel('menu_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'menu_items' },
-        async () => {
+        { 
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public', 
+          table: 'menu_items' 
+        },
+        async (payload) => {
+          console.log('Real-time menu_items change:', payload.eventType, payload);
+          // Immediately reload menu items without debounce for instant updates
           const { data, error } = await supabase
             .from('menu_items')
             .select('*')
@@ -352,6 +358,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               description: item.description || undefined,
             }));
             setMenuItems(mappedItems);
+            console.log(`✅ Menu updated in real-time: ${mappedItems.length} items`);
+          } else if (error) {
+            console.error('Error reloading menu items in real-time:', error);
           }
         }
       )

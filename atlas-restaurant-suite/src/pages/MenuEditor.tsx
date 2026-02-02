@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -181,6 +181,8 @@ const MenuEditor: React.FC = () => {
   const [draggedItem, setDraggedItem] = useState<MenuItem | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  // Optimistic updates for immediate UI feedback
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Partial<MenuItem>>>(new Map());
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -192,8 +194,17 @@ const MenuEditor: React.FC = () => {
     useSensor(KeyboardSensor)
   );
 
+  // Apply optimistic updates to menuItems for immediate UI feedback
+  const displayItems = menuItems.map(item => {
+    const optimistic = optimisticUpdates.get(item.id);
+    if (optimistic) {
+      return { ...item, ...optimistic };
+    }
+    return item;
+  });
+
   // Group items by category, handling unassigned items
-  const groupedItems = menuItems.reduce((acc, item) => {
+  const groupedItems = displayItems.reduce((acc, item) => {
     // Treat empty, null, or undefined categories as "Unassigned"
     const category = item.cat && item.cat.trim() ? item.cat.trim() : '📦 Unassigned';
     if (!acc[category]) {
@@ -205,6 +216,36 @@ const MenuEditor: React.FC = () => {
 
   // Get all unique categories for creating new ones
   const allCategories = Object.keys(groupedItems).filter(cat => cat !== '📦 Unassigned');
+
+  // Clear optimistic updates when menuItems change from real-time subscription
+  // This ensures the UI stays in sync with the database
+  useEffect(() => {
+    // Clear any optimistic updates that match the current database state
+    setOptimisticUpdates(prev => {
+      const next = new Map(prev);
+      let hasChanges = false;
+      
+      // Remove optimistic updates for items that are now in sync with database
+      for (const [itemId, optimistic] of next.entries()) {
+        const dbItem = menuItems.find(m => m.id === itemId);
+        if (dbItem) {
+          // Check if the optimistic update matches the database state
+          const isInSync = Object.keys(optimistic).every(key => {
+            const dbValue = dbItem[key as keyof MenuItem];
+            const optValue = optimistic[key as keyof MenuItem];
+            return dbValue === optValue;
+          });
+          
+          if (isInSync) {
+            next.delete(itemId);
+            hasChanges = true;
+          }
+        }
+      }
+      
+      return hasChanges ? next : prev;
+    });
+  }, [menuItems]);
 
   const handleAddNew = () => {
     setEditingItem(null);
@@ -225,7 +266,7 @@ const MenuEditor: React.FC = () => {
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const item = menuItems.find(i => i.id === active.id);
+    const item = displayItems.find(i => i.id === active.id);
     setDraggedItem(item || null);
   };
 
@@ -235,7 +276,7 @@ const MenuEditor: React.FC = () => {
 
     if (!over || active.id === over.id) return;
 
-    const item = menuItems.find(i => i.id === active.id);
+    const item = displayItems.find(i => i.id === active.id);
     const targetCategory = over.id as string;
 
     if (!item || !targetCategory) return;
@@ -246,6 +287,13 @@ const MenuEditor: React.FC = () => {
     // Check if category already exists or if it's the same
     const currentCategory = item.cat && item.cat.trim() ? item.cat.trim() : '📦 Unassigned';
     if (currentCategory === targetCategory) return;
+
+    // Optimistic update: immediately update UI
+    setOptimisticUpdates(prev => {
+      const next = new Map(prev);
+      next.set(item.id, { cat: normalizedCategory });
+      return next;
+    });
 
     try {
       await updateMenuItem(item.id, {
@@ -258,12 +306,26 @@ const MenuEditor: React.FC = () => {
         setNewCategoryName('');
       }
       
+      // Clear optimistic update immediately after database update
+      // Real-time subscription will sync the actual state very quickly
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        next.delete(item.id);
+        return next;
+      });
+      
       toast({
         title: 'Success',
         description: `Moved "${item.name}" to ${targetCategory}`,
       });
     } catch (error) {
       console.error('Error moving item:', error);
+      // Rollback optimistic update on error
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        next.delete(item.id);
+        return next;
+      });
       toast({
         title: 'Error',
         description: 'Failed to move item',
