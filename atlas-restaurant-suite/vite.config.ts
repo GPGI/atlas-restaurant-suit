@@ -22,26 +22,41 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
+        manualChunks: (id) => {
+          // React and React DOM should be in vendor chunk (loaded first)
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          
           // Admin pages - only loaded when staff accesses admin
-          'admin': [
-            './src/pages/StaffDashboard',
-            './src/pages/MenuEditor'
-          ],
+          if (id.includes('src/pages/StaffDashboard') || id.includes('src/pages/MenuEditor')) {
+            return 'admin';
+          }
+          
           // Drag and drop library - only needed in MenuEditor
-          'dnd': [
-            '@dnd-kit/core',
-            '@dnd-kit/sortable',
-            '@dnd-kit/utilities'
-          ],
-          // UI libraries - shared across app
-          'ui': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-toast'
-          ],
+          if (id.includes('@dnd-kit')) {
+            return 'dnd';
+          }
+          
+          // UI libraries - shared across app (but React must be available)
+          if (id.includes('@radix-ui')) {
+            return 'ui';
+          }
+          
           // Supabase - large library
-          'supabase': ['@supabase/supabase-js']
+          if (id.includes('@supabase/supabase-js')) {
+            return 'supabase';
+          }
+          
+          // React Router
+          if (id.includes('react-router')) {
+            return 'vendor-router';
+          }
+          
+          // Other vendor libraries
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
         }
       }
     },
